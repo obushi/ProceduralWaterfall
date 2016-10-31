@@ -1,0 +1,67 @@
+﻿#pragma kernel CSMain
+
+#include "UnityCG.cginc"
+#include "ClassicNoise2D.cginc"
+
+#define NUM_THREAD_X 8
+#define NUM_THREAD_Y 1
+#define NUM_THREAD_Z 1
+
+struct StreamLine
+{
+	int id;
+	float3 birthPosition;
+	float3 deathPosition;
+	float3 position;
+	float3 initVelocity;
+	float3 velocity;
+};
+
+struct Drop
+{
+	int id;
+	int streamId;
+	float particleSize;
+};
+
+cbuffer CB
+{
+	float _DeltaTime;
+	float3 _Gravity;
+	float3 _EmitterSize;
+	float3 _EliminatorSize;
+}
+
+RWStructuredBuffer<StreamLine> _ParticlesBuffer;
+
+[numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
+void CSMain (uint3 Gid : SV_GroupID,
+			 uint3 GTid : SV_GroupThreadID,
+			 uint3 DTid : SV_DispatchThreadID,
+			 uint GI : SV_GroupIndex)
+{
+	int i = DTid.x;
+
+	float3 position = _ParticlesBuffer[i].position;
+	float3 velocity = _ParticlesBuffer[i].velocity;
+	float3 deathPos = _ParticlesBuffer[i].deathPosition;
+	float  dt = _DeltaTime;
+
+	velocity.y += -_Gravity.y * dt;
+
+	position.y += velocity.y * dt;
+	position.z += velocity.z * dt;
+
+	//if (position.x < -deathPos.x * 0.5 || position.x > deathPos.x * 0.5 ||
+	//	position.y < -deathPos.y * 0.5 || position.y > deathPos.y * 0.5 ||
+	//	position.z < -deathPos.z * 0.5 || position.z > deathPos.z * 0.5)
+	//{
+	//	position = _ParticlesBuffer[i].birthPosition;
+	//	velocity = _ParticlesBuffer[i].initVelocity;
+	//}
+
+	_ParticlesBuffer[i].position = position;
+	_ParticlesBuffer[i].velocity = velocity;
+	//_ParticlesBuffer[i].position -= velocity;
+	//_ParticlesBuffer[i].velocity = float3(0, 1.0f, 0);
+}
