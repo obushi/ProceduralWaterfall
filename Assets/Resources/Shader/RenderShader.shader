@@ -26,7 +26,7 @@
 		float4 color : COLOR;
 	};
 
-	StructuredBuffer<StreamLine> _ParticlesBuffer;
+	StructuredBuffer<StreamLine> _StreamLinesBuffer;
 	sampler2D _DropTexture;
 	float4 _DropTexture_ST;
 	float _DropSize;
@@ -51,7 +51,7 @@
 	v2g vert(uint id : SV_VertexID)
 	{
 		v2g o = (v2g)0;
-		o.position = _ParticlesBuffer[id].position;
+		o.position = _StreamLinesBuffer[id].position;
 		o.color = float4(0.3, 0.3, 0.3, 0.1);
 		return o;
 	}
