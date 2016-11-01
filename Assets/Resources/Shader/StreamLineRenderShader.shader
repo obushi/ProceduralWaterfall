@@ -1,4 +1,4 @@
-﻿Shader "Waterfall/Render"
+﻿Shader "Waterfall/StreamLinesRender"
 {
 	CGINCLUDE
 	#include "UnityCG.cginc"

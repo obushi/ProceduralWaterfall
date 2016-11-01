@@ -68,6 +68,9 @@ public struct Drop
     public int Id;
     public int StreamId;
     public float ParticleSize;
+    public Vector3 DropSize;
+    public Vector3 Position;
+    public Vector3 Velocity;
 }
 
 public class Waterfall : MonoBehaviour {
@@ -95,8 +98,10 @@ public class Waterfall : MonoBehaviour {
     public ComputeShader UpdateShader;
     public ComputeBuffer StreamLinesBuffer;
     public ComputeBuffer DropsBuffer;
-    public Shader RenderShader;
-    public Material ParticlesMaterial;
+    public Shader StreamLinesRenderShader;
+    public Material StreamLinesMaterial;
+    public Shader DropsRenderShader;
+    public Material DropsMaterial;
     public Camera BillboardCam;
 
     public GameObject[] Lines;
@@ -121,6 +126,7 @@ public class Waterfall : MonoBehaviour {
         StreamLinesBuffer = new ComputeBuffer(numStreams, Marshal.SizeOf(typeof(StreamLine)));
         DropsBuffer = new ComputeBuffer(numDrops, Marshal.SizeOf(typeof(Drop)));
 
+        // Setup stream lines
         StreamLine[] streams = new StreamLine[numStreams];
         for (int i = 0; i < numStreams; i++)
         {
@@ -140,34 +146,42 @@ public class Waterfall : MonoBehaviour {
             streams[i].Velocity = streams[i].InitVelocity;
         }
         StreamLinesBuffer.SetData(streams);
+        StreamLinesMaterial = new Material(StreamLinesRenderShader);
+        StreamLinesMaterial.hideFlags = HideFlags.HideAndDontSave;
 
-        var drops = new Drop[numDrops];
-        for (int i = 0; i < numDrops; i++)
-        {
-            drops[i].Id = i;
-            drops[i].StreamId = -1;
-            drops[i].ParticleSize = DropSize;
-        }
-        DropsBuffer.SetData(drops);
-
-        ParticlesMaterial = new Material(RenderShader);
-        ParticlesMaterial.hideFlags = HideFlags.HideAndDontSave;
-
+        //Draw stream lines
         Lines = new GameObject[numStreams];
         for (int i = 0; i < numStreams; i++)
         {
-            Lines[i] = new GameObject();
+            Lines[i] = new GameObject("Stream Line [" + i + "]");
             var lineRenderer = Lines[i].AddComponent<LineRenderer>();
             lineRenderer.material.shader = Shader.Find("Unlit/Color");
             lineRenderer.SetVertexCount(11);
-            lineRenderer.SetWidth(0.1f, 0.1f);
+            lineRenderer.SetWidth(0.01f, 0.01f);
             lineRenderer.SetPositions(GetParabolaPoints(streams[i].BirthPosition, streams[i].DeathPosition, 10));
         }
         streams = null;
+
+        // Setup drops
+        var drops = new Drop[numDrops];
+        for (int i = 0; i < numDrops; i++)
+        {
+            drops[i].Id = i % (numStreams + 1);
+            drops[i].StreamId = (int)Random.Range(0, numStreams - float.Epsilon);
+            drops[i].ParticleSize = DropSize;
+            drops[i].Position = new Vector3(Random.Range(EmitterSize.x + drops[i].Id * 0.2f, EmitterSize.x + drops[i].Id * 0.21f),
+                                            Random.Range(EmitterSize.y - 0.1f, EmitterSize.y + 0.1f),
+                                            Random.Range(EmitterSize.z - 0.1f, EmitterSize.z + 0.1f));
+            drops[i].Velocity = Vector3.down;
+        }
+        DropsBuffer.SetData(drops);
+        DropsMaterial = new Material(DropsRenderShader);
+        DropsMaterial.hideFlags = HideFlags.HideAndDontSave;
     }
 
     void OnRenderObject()
     {
+        // compute shader
         ComputeShader cs = UpdateShader;
 
         cs.SetFloat("_DeltaTime", Time.deltaTime);
@@ -180,23 +194,32 @@ public class Waterfall : MonoBehaviour {
         int kernelIdStreamLines = cs.FindKernel("CSStreamLines");
         cs.SetBuffer(kernelIdStreamLines, "_StreamLinesBuffer", StreamLinesBuffer);
         cs.Dispatch(kernelIdStreamLines, numThreadGroupStreamLines, 1, 1);
-        
+
         // Drops
         int numThreadGroupDrops = numDrops / numThreadX;
         int kernelIdDrops = cs.FindKernel("CSDrops");
         cs.SetBuffer(kernelIdDrops, "_DropsBuffer", DropsBuffer);
         cs.Dispatch(kernelIdDrops, numThreadGroupDrops, 1, 1);
 
+        // vert / geom / frag shader
         var inverseViewMatrix = BillboardCam.worldToCameraMatrix.inverse;
 
-        Material m = ParticlesMaterial;
-        m.SetPass(0);
-        m.SetMatrix("_InvViewMatrix", inverseViewMatrix);
-        m.SetTexture("_DropTexture", DropTexture);
-        m.SetFloat("_DropSize", DropSize);
-        m.SetBuffer("_StreamLinesBuffer", StreamLinesBuffer);
-
+        Material m1 = StreamLinesMaterial;
+        m1.SetPass(0);
+        m1.SetMatrix("_InvViewMatrix", inverseViewMatrix);
+        m1.SetTexture("_DropTexture", DropTexture);
+        m1.SetFloat("_DropSize", DropSize);
+        m1.SetBuffer("_StreamLinesBuffer", StreamLinesBuffer);
         Graphics.DrawProcedural(MeshTopology.Points, numStreams);
+
+        Material m2 = DropsMaterial;
+        m2.SetPass(0);
+        m2.SetMatrix("_InvViewMatrix", inverseViewMatrix);
+        m2.SetTexture("_DropTexture", DropTexture);
+        m2.SetFloat("_DropSize", DropSize);
+        m2.SetBuffer("_DropsBuffer", DropsBuffer);
+
+        //Graphics.DrawProcedural(MeshTopology.Points, numDrops);
 
     }
 
@@ -208,7 +231,7 @@ public class Waterfall : MonoBehaviour {
         if (DropsBuffer != null)
             DropsBuffer.Release();
 
-        if (ParticlesMaterial != null)
-            DestroyImmediate(ParticlesMaterial);
+        if (StreamLinesMaterial != null)
+            DestroyImmediate(StreamLinesMaterial);
     }
 }
