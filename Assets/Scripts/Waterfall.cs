@@ -104,6 +104,10 @@ public class Waterfall : MonoBehaviour {
     public Material DropsMaterial;
     public Camera BillboardCam;
 
+    public RenderTexture PerlinTexture;
+    public Shader PerlinShader;
+    public Material PerlinMaterial;
+
     public GameObject[] Lines;
 
     Vector3[] GetParabolaPoints(Vector3 birthPos, Vector3 deathPos, int numDivision)
@@ -177,6 +181,13 @@ public class Waterfall : MonoBehaviour {
         DropsBuffer.SetData(drops);
         DropsMaterial = new Material(DropsRenderShader);
         DropsMaterial.hideFlags = HideFlags.HideAndDontSave;
+
+        PerlinTexture = new RenderTexture(256, 256, 0, RenderTextureFormat.ARGBFloat);
+        PerlinTexture.hideFlags = HideFlags.DontSave;
+        PerlinTexture.filterMode = FilterMode.Point;
+        PerlinTexture.wrapMode = TextureWrapMode.Repeat;
+
+        PerlinMaterial = new Material(PerlinShader);
     }
 
     void OnRenderObject()
@@ -220,7 +231,7 @@ public class Waterfall : MonoBehaviour {
         m2.SetBuffer("_DropsBuffer", DropsBuffer);
 
         //Graphics.DrawProcedural(MeshTopology.Points, numDrops);
-
+        Graphics.Blit(null, PerlinTexture, PerlinMaterial, 0);
     }
 
     void OnDestroy()
