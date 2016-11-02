@@ -197,8 +197,6 @@ public class Waterfall : MonoBehaviour {
 
         cs.SetFloat("_DeltaTime", Time.deltaTime);
         cs.SetFloat("_Gravity", g);
-        cs.SetVector("_EmitterSize", EmitterSize);
-        cs.SetVector("_EliminatorSize", EliminatorSize);
 
         // Stream Lines
         int numThreadGroupStreamLines = numStreams / numThreadX;
@@ -210,6 +208,7 @@ public class Waterfall : MonoBehaviour {
         int numThreadGroupDrops = numDrops / numThreadX;
         int kernelIdDrops = cs.FindKernel("CSDrops");
         cs.SetBuffer(kernelIdDrops, "_DropsBuffer", DropsBuffer);
+        cs.SetTexture(kernelIdDrops, "_PerlinTexture", PerlinTexture);
         cs.Dispatch(kernelIdDrops, numThreadGroupDrops, 1, 1);
 
         // vert / geom / frag shader

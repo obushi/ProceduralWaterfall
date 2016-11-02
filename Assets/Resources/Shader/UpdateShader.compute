@@ -32,8 +32,6 @@ cbuffer CB
 {
 	float _DeltaTime;
 	float _Gravity;
-	float3 _EmitterSize;
-	float3 _EliminatorSize;
 }
 
 RWStructuredBuffer<StreamLine> _StreamLinesBuffer;
