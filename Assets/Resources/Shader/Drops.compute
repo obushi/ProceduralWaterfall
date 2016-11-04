@@ -1,0 +1,68 @@
+﻿#pragma kernel Init
+#pragma kernel Emit
+#pragma kernel Update
+#pragma kernel Sort
+
+#include "UnityCG.cginc"
+#include "ClassicNoise2D.cginc"
+
+#define NUM_THREAD_X 8
+#define NUM_THREAD_Y 1
+#define NUM_THREAD_Z 1
+
+cbuffer CB
+{
+	int _StreamsCount;
+	int _PerlinT;
+}
+
+struct Drop
+{
+	float dropSize;
+	float3 position;
+	float3 velocity;
+};
+
+RWStructuredBuffer<Drop> _DropsBuff;
+AppendStructuredBuffer<uint> _DeadBuffAppend;
+ConsumeStructuredBuffer<uint> _DeadBuffConsume;
+Texture2D<float4> _PerlinTexture;
+
+// 0 Init
+
+[numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
+void Init(uint3 DTid : SV_DispatchThreadID)
+{
+	_DeadBuffAppend.Append(DTid.x);
+}
+
+// 1 Emit
+
+[numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
+void Emit(uint3 DTid : SV_DispatchThreadID)
+{
+	float4 v = _PerlinTexture[uint2(DTid.x, _PerlinT)] * 1;
+	for (int i = 0; i < v.x; i++)
+	{
+		uint dropId = _DeadBuffConsume.Consume();
+		_DropsBuff[dropId].dropSize = 0.1;
+		_DropsBuff[dropId].position = float3(0, 0, 0);
+		_DropsBuff[dropId].velocity = float3(0, 0, 0);
+	}
+}
+
+// 2 Update
+
+[numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
+void Update(uint3 DTid : SV_DispatchThreadID)
+{
+	if (abs(_DropsBuff[DTid.x].position.x) > 10 || abs(_DropsBuff[DTid.x].position.y) > 10 || abs(_DropsBuff[DTid.x].position.z) > 10) {
+		_DeadBuffAppend.Append(DTid.x);
+		_DropsBuff[DTid.x].position = float3(0, 0, 0);
+		_DropsBuff[DTid.x].dropSize = 0;
+		return;
+	}
+
+	_DropsBuff[DTid.x].velocity += float3(sin(_PerlinT) * 0.1, 0, 0);
+	_DropsBuff[DTid.x].position += _DropsBuff[DTid.x].velocity;
+}

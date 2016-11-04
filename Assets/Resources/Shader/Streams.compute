@@ -93,3 +93,51 @@ void CSDrops (uint3 Gid : SV_GroupID,
 	_DropsBuffer[i].position = position;
 	_DropsBuffer[i].velocity = velocity;
 }
+
+//// Init
+//AppendStructuredBuffer<uint> _DeadList;
+//[numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
+//void Init(uint id : SV_DispatchThreadID)
+//{
+//	_DeadList.Append(id.x);
+//
+//}
+//
+//// Emit
+//ConsumeStructuredBuffer<uint> _DeadList;
+//RWStructuredBuffer<uint> _DropsBuffer;
+//uint _numEmit; // From CPU
+//[numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
+//void Emit(uint id : SV_DispatchThreadID)
+//{
+//	for (int i = 0; i < _numEmit; i++)
+//	{
+//		uint id = _DeadList.Consume();
+//		_DropsBuffer[id.x].velocity = ...;
+//		_DropsBuffer[id.x].position = ...;
+//	}
+//}
+//
+//// Update
+//RWStructuredBuffer<Drop> _DropsBuffer;
+//AppendStructuredBuffer<uint> _DeadList;
+//RWStructuredBuffer<float2> _SortList;
+//[numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
+//void Update(uint id : SV_DispatchThreadID)
+//{
+//	_DropsBuffer[id.x].velocity += ...
+//	_DropsBuffer[id.x].postion += ...
+//
+//	if (dead)
+//	{
+//		_DeadList.Append(id.x);
+//	}
+//
+//	else
+//	{
+//		_SortList[id.x].distance = ...
+//	}
+//}
+//
+//// Sort
+//RWStructuredBuffer<float2> _SortList;

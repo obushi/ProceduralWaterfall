@@ -80,16 +80,16 @@
 	{
 		return tex2D(_DropTexture, i.texcoord.xy) * i.color;
 	}
-		ENDCG
+	ENDCG
 
-		SubShader
+	SubShader
 	{
 		Tags{ "RenderType" = "Transparent" "IgnoreProjector" = "True" "RenderType" = "Transparent" }
-			LOD 100
+		LOD 100
 
-			Zwrite Off
-			Blend One One
-			Cull Off
+		Zwrite Off
+		Blend One One
+		Cull Off
 
 		Pass
 		{
