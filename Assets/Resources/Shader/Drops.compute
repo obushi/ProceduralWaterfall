@@ -1,7 +1,7 @@
 ﻿#pragma kernel Init
 #pragma kernel Emit
 #pragma kernel Update
-#pragma kernel Sort
+#pragma kernel Copy
 
 #include "UnityCG.cginc"
 #include "ClassicNoise2D.cginc"
@@ -18,22 +18,32 @@ cbuffer CB
 
 struct Drop
 {
+	uint id;
 	float dropSize;
 	float3 position;
 	float3 velocity;
 };
 
 RWStructuredBuffer<Drop> _DropsBuff;
-AppendStructuredBuffer<uint> _DeadBuffAppend;
-ConsumeStructuredBuffer<uint> _DeadBuffConsume;
-Texture2D<float4> _PerlinTexture;
+
+// Dead
+AppendStructuredBuffer<Drop> _DeadBuff1_In;
+ConsumeStructuredBuffer<Drop> _DeadBuff1_Out;
+
+// Alive 1 / 2
+AppendStructuredBuffer<Drop> _AliveBuff1_In;
+ConsumeStructuredBuffer<Drop> _AliveBuff1_Out;
+AppendStructuredBuffer<Drop> _AliveBuff2_In;
+ConsumeStructuredBuffer<Drop> _AliveBuff2_Out;
+
+Texture2D _PerlinTexture;
 
 // 0 Init
 
 [numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
 void Init(uint3 DTid : SV_DispatchThreadID)
 {
-	_DeadBuffAppend.Append(DTid.x);
+	_DeadBuff1_In.Append(_DropsBuff[DTid.x]);
 }
 
 // 1 Emit
@@ -41,13 +51,19 @@ void Init(uint3 DTid : SV_DispatchThreadID)
 [numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
 void Emit(uint3 DTid : SV_DispatchThreadID)
 {
-	float4 v = _PerlinTexture[uint2(DTid.x, _PerlinT)] * 1;
+	float4 v = _PerlinTexture[uint2(DTid.x, _PerlinT)] *  128;
 	for (int i = 0; i < v.x; i++)
 	{
-		uint dropId = _DeadBuffConsume.Consume();
-		_DropsBuff[dropId].dropSize = 0.1;
-		_DropsBuff[dropId].position = float3(0, 0, 0);
-		_DropsBuff[dropId].velocity = float3(0, 0, 0);
+		Drop d = _DeadBuff1_Out.Consume();
+		d.dropSize = 0.1f;
+		d.position = float3(DTid.x * 0.1, i * 0.05, 0);
+		d.velocity = float3(0, 1, 0);
+		_AliveBuff2_In.Append(d);
+
+		//uint dropId = _ActiveBuffConsume.Consume();
+		//_DropsBuff[dropId].dropSize = 0.1;
+		//_DropsBuff[dropId].position = float3(0, 0, 0);
+		//_DropsBuff[dropId].velocity = float3(0, 0, 0);
 	}
 }
 
@@ -56,13 +72,32 @@ void Emit(uint3 DTid : SV_DispatchThreadID)
 [numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
 void Update(uint3 DTid : SV_DispatchThreadID)
 {
-	if (abs(_DropsBuff[DTid.x].position.x) > 10 || abs(_DropsBuff[DTid.x].position.y) > 10 || abs(_DropsBuff[DTid.x].position.z) > 10) {
-		_DeadBuffAppend.Append(DTid.x);
-		_DropsBuff[DTid.x].position = float3(0, 0, 0);
-		_DropsBuff[DTid.x].dropSize = 0;
-		return;
-	}
+	Drop d = _AliveBuff1_Out.Consume();
+	d.velocity += float3(0, 0.1, 0);
+	d.position += d.velocity;
 
-	_DropsBuff[DTid.x].velocity += float3(sin(_PerlinT) * 0.1, 0, 0);
-	_DropsBuff[DTid.x].position += _DropsBuff[DTid.x].velocity;
+	float3 pos = d.position;
+	if (abs(pos.x) > 10 || abs(pos.y) > 10 || abs(pos.z) > 10) {
+		_DeadBuff1_In.Append(d);
+	}
+	else {
+		_AliveBuff2_In.Append(d);
+	}
+}
+
+//// 3 Register
+//
+//[numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
+//void Register(uint3 DTid : SV_DispatchThreadID)
+//{
+//	Drop d = _TempBuffC.Consume();
+//	_InitBuffA.Append(d);
+//}
+
+// 3
+[numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
+void Copy(uint3 DTid : SV_DispatchThreadID)
+{
+	Drop d = _AliveBuff2_Out.Consume();
+	_AliveBuff1_In.Append(d);
 }

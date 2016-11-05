@@ -65,6 +65,7 @@ public struct StreamLine
 
 public struct Drop
 {
+    public uint Id;
     public float DropSize;
     public Vector3 Position;
     public Vector3 Velocity;
@@ -94,7 +95,7 @@ public class Waterfall : MonoBehaviour {
 
     const int maxDropsCount = 20000;
     const int streamLinesCount = 64;
-    const int maxEmitQuantity = 127 * streamLinesCount;
+    const int maxEmitQuantity = 128 * streamLinesCount;
     const int numThreadX = 8;
     const int numThreadY = 1;
     const int numThreadZ = 1;
@@ -116,12 +117,17 @@ public class Waterfall : MonoBehaviour {
     #region Drop
 
     public ComputeShader DropsCS;
+
     public ComputeBuffer DropsBuff;
-    public ComputeBuffer DeadBuff;
+    public ComputeBuffer DeadBuff1;
+    public ComputeBuffer DeadBuff2;
+    public ComputeBuffer AliveBuff1;
+    public ComputeBuffer AliveBuff2;
+
     public Shader DropsRenderShader;
     public Material DropsMaterial;
 
-    public ComputeBuffer DeadArgsBuff;
+    public ComputeBuffer BuffArgs;
 
     #endregion
 
@@ -152,13 +158,21 @@ public class Waterfall : MonoBehaviour {
     {
         StreamLinesBuff = new ComputeBuffer(streamLinesCount, Marshal.SizeOf(typeof(StreamLine)));
 
-        DeadBuff = new ComputeBuffer(maxDropsCount, sizeof(int), ComputeBufferType.Append);
-        DeadBuff.SetCounterValue(0);
-        
+        DeadBuff1 = new ComputeBuffer(maxDropsCount, Marshal.SizeOf(typeof(Drop)), ComputeBufferType.Append);
+        DeadBuff1.SetCounterValue(0);
+
+        DeadBuff2 = new ComputeBuffer(maxDropsCount, Marshal.SizeOf(typeof(Drop)), ComputeBufferType.Append);
+        DeadBuff2.SetCounterValue(0);
+
+        AliveBuff1 = new ComputeBuffer(maxDropsCount, Marshal.SizeOf(typeof(Drop)), ComputeBufferType.Append);
+        AliveBuff1.SetCounterValue(0);
+
+        AliveBuff2 = new ComputeBuffer(maxDropsCount, Marshal.SizeOf(typeof(Drop)), ComputeBufferType.Append);
+        AliveBuff2.SetCounterValue(0);
+
         DropsBuff = new ComputeBuffer(maxDropsCount, Marshal.SizeOf(typeof(Drop)));
-        DeadArgsBuff = new ComputeBuffer(4, sizeof(int), ComputeBufferType.IndirectArguments);
 
-
+        BuffArgs = new ComputeBuffer(4, sizeof(int), ComputeBufferType.IndirectArguments);
 
         // Setup stream lines
         StreamLine[] streams = new StreamLine[streamLinesCount];
@@ -200,13 +214,14 @@ public class Waterfall : MonoBehaviour {
         var drops = new Drop[maxDropsCount];
         for (int i = 0; i < maxDropsCount; i++)
         {
+            drops[i].Id = (uint)i;
             drops[i].DropSize = 0.1f;
-            drops[i].Position = Vector3.zero;
-                
-                //new Vector3(Random.Range(EmitterSize.x + drops[i].Id * 0.2f, EmitterSize.x + drops[i].Id * 0.21f),
-                //                            Random.Range(EmitterSize.y - 0.1f, EmitterSize.y + 0.1f),
-                //                            Random.Range(EmitterSize.z - 0.1f, EmitterSize.z + 0.1f));
-            drops[i].Velocity = Vector3.down * 0.01f;
+            drops[i].Position = new Vector3(0, 0, 0);
+
+            //new Vector3(Random.Range(EmitterSize.x + drops[i].Id * 0.2f, EmitterSize.x + drops[i].Id * 0.21f),
+            //                            Random.Range(EmitterSize.y - 0.1f, EmitterSize.y + 0.1f),
+            //                            Random.Range(EmitterSize.z - 0.1f, EmitterSize.z + 0.1f));
+            drops[i].Velocity = Vector3.down;
         }
         
         DropsBuff.SetData(drops);
@@ -224,16 +239,17 @@ public class Waterfall : MonoBehaviour {
         int numThreadGroupDrops = maxDropsCount / numThreadX;
 
         // 0 : Init
-        DropsCS.SetBuffer(0, "_DeadBuffAppend", DeadBuff);
+        DropsCS.SetBuffer(0, "_DeadBuff1_In", DeadBuff1);
+        DropsCS.SetBuffer(0, "_DropsBuff", DropsBuff);
         DropsCS.Dispatch(0, numThreadGroupDrops, 1, 1);
     }
 
-    int GetDeadBuffSize()
+    int GetActiveBuffSize(ComputeBuffer cb)
     {
         int[] args = new int[] { 0, 1, 0, 0 };
-        DeadArgsBuff.SetData(args);
-        ComputeBuffer.CopyCount(DeadBuff, DeadArgsBuff, 0);
-        DeadArgsBuff.GetData(args);
+        BuffArgs.SetData(args);
+        ComputeBuffer.CopyCount(cb, BuffArgs, 0);
+        BuffArgs.GetData(args);
         return args[0];
     }
 
@@ -248,7 +264,7 @@ public class Waterfall : MonoBehaviour {
         StreamsCS.SetBuffer(0, "_StreamLinesBuffer", StreamLinesBuff);
         StreamsCS.Dispatch(0, numThreadGroupStreamLines, 1, 1);
 
-        // Drops
+        //Drops
         int numThreadGroupDrops = maxDropsCount / numThreadX;
         DropsCS.SetInt("_StreamsCount", streamLinesCount);
 
@@ -257,21 +273,22 @@ public class Waterfall : MonoBehaviour {
         DropsCS.SetInt("_PerlinT", perlinT);
 
         // 1 : Emit
-        DropsCS.SetBuffer(1, "_DeadBuffConsume", DeadBuff);
-        DropsCS.SetBuffer(1, "_DropsBuff", DropsBuff);
+        DropsCS.SetBuffer(1, "_DeadBuff1_Out", DeadBuff1);
+        DropsCS.SetBuffer(1, "_AliveBuff2_In", AliveBuff2);
         DropsCS.SetTexture(1, "_PerlinTexture", PerlinTexture);
-        int c = GetDeadBuffSize() > maxEmitQuantity ? numThreadGroupStreamLines : 0;
-        DropsCS.Dispatch(1, c, 1, 1);
-
-        //Debug.Log("c:" + c);
-        //Debug.Log("diff" + (GetDeadBuffSize() - oldCount));
-        //Debug.Log("GetDeadBuffSize:" + GetDeadBuffSize());
-        //oldCount = GetDeadBuffSize();
+        var emitCount = GetActiveBuffSize(DeadBuff1) > maxEmitQuantity ? numThreadGroupStreamLines : 0;
+        //Debug.Log("Dead1 : " + GetActiveBuffSize(DeadBuff1));
+        //Debug.Log("Alive1 : " + GetActiveBuffSize(AliveBuff1));
+        DropsCS.Dispatch(1, emitCount, 1, 1);
 
         // 2 : Update
-        DropsCS.SetBuffer(2, "_DropsBuff", DropsBuff);
-        DropsCS.Dispatch(2, numThreadGroupDrops, 1, 1);
+        DropsCS.SetBuffer(2, "_AliveBuff1_Out", AliveBuff1);
+        DropsCS.SetBuffer(2, "_AliveBuff2_In", AliveBuff2);
+        DropsCS.SetBuffer(2, "_DeadBuff1_In", DeadBuff1);
+        //var updateGroups = GetActiveBuffSize(AliveBuff1) > maxEmitQuantity ? GetActiveBuffSize(AliveBuff1) : 0;
 
+        DropsCS.Dispatch(2, GetActiveBuffSize(AliveBuff1) / numThreadX, 1, 1);
+        
         // vert / geom / frag shader
         var inverseViewMatrix = BillboardCam.worldToCameraMatrix.inverse;
 
@@ -286,17 +303,33 @@ public class Waterfall : MonoBehaviour {
         DropsMaterial.SetMatrix("_InvViewMatrix", inverseViewMatrix);
         DropsMaterial.SetTexture("_DropTexture", DropTexture);
         DropsMaterial.SetFloat("_DropSize", DropSize);
-        DropsMaterial.SetBuffer("_DropsBuff", DropsBuff);
+        DropsMaterial.SetBuffer("_DropsBuff", AliveBuff2);
         Graphics.DrawProcedural(MeshTopology.Points, maxDropsCount);
+
+        Debug.Log("Dead1 : " + GetActiveBuffSize(DeadBuff1));
+        Debug.Log("Alive2 : " + GetActiveBuffSize(AliveBuff2));
+
+        // 3 : Copy
+        AliveBuff1.SetCounterValue(0);
+        DropsCS.SetBuffer(3, "_AliveBuff1_In", AliveBuff1);
+        DropsCS.SetBuffer(3, "_AliveBuff2_Out", AliveBuff2);
+        DropsCS.Dispatch(3, GetActiveBuffSize(AliveBuff2) / numThreadX, 1, 1);
+
+        Debug.Log("Alive1 : " + GetActiveBuffSize(AliveBuff1));
+
+        //AliveBuff1 = AliveBuff2;
+        //AliveBuff2.SetCounterValue(0);
     }
 
     void OnDisable()
     {
-        if (StreamLinesBuff != null)        StreamLinesBuff.Release();
-        if (DropsBuff != null)              DropsBuff.Release();
-        if (DeadBuff != null)               DeadBuff.Release();
-        
-        if (DeadArgsBuff != null)           DeadArgsBuff.Release();
+        if (StreamLinesBuff != null) StreamLinesBuff.Release();
+        if (DropsBuff != null)  DropsBuff.Release();
+        if (DeadBuff1 != null)  DeadBuff1.Release();
+        if (DeadBuff2 != null)  DeadBuff2.Release();
+        if (AliveBuff1 != null) AliveBuff1.Release();
+        if (AliveBuff2 != null) AliveBuff2.Release();
+        if (BuffArgs != null)   BuffArgs.Release();
 
         if (StreamLinesMaterial != null)    DestroyImmediate(StreamLinesMaterial);
         if (DropsMaterial != null)          DestroyImmediate(DropsMaterial);
