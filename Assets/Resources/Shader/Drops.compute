@@ -17,6 +17,7 @@ cbuffer CB
 	float _Gravity;
 	float _DeltaTime;
 	float _Jet;
+	float _RandSeed;
 }
 
 struct Drop
@@ -70,12 +71,18 @@ void Init(uint3 DTid : SV_DispatchThreadID)
 [numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
 void Emit(uint3 DTid : SV_DispatchThreadID)
 {
-	float4 a = _PerlinTexture[uint2(DTid.x, _PerlinT)] * 16;
-	float emitAmount = round(a.x) * 8;
+	// Position
+	float4 perlin = _PerlinTexture[uint2(DTid.x, _PerlinT)];
+	float emitAmount = round(perlin.x * 8) * 16;
 	float3 p = _StreamLinesBuffer[DTid.x].birthPosition;
-	float3 v = _StreamLinesBuffer[DTid.x].initVelocity;
 	int nextStreamId = clamp(DTid.x + 1, 0, _StreamsCount - 1);
-	float2 posDiffXZ = _StreamLinesBuffer[nextStreamId].birthPosition.xz - p.xz;
+	float3 posGap = _StreamLinesBuffer[nextStreamId].birthPosition - p;
+	float diff = 2.0 * (1.0 - perlin.x) * rand(float2(_RandSeed, DTid.x));
+
+	// Velocity
+	float theta = cnoise(float2(DTid.x, _RandSeed)) * radians(45);
+	float3 v = _StreamLinesBuffer[DTid.x].initVelocity;
+	float absV = length(v.xz);
 
 	for (int i = 0; i < emitAmount; i++)
 	{
@@ -83,10 +90,15 @@ void Emit(uint3 DTid : SV_DispatchThreadID)
 		d.streamId = DTid.x;
 
 		d.dropSize = 0.1f;
-		d.position = float3(p.x + posDiffXZ.x * rand(float2(DTid.x, i + 1)),
-			                p.y + p.y * 0.1 * rand(float2(DTid.x, i)),
-			                p.z + posDiffXZ.y * rand(float2(DTid.x, i + 2)));
-		d.velocity = float3(v.x, v.y, v.z);
+
+		d.velocity = float3(v.x + 1.0 * absV * sin(theta),
+			                v.y - 1.0 * v.y * rand(float2(DTid.x, i + 3)),
+			                v.z - 1.0 * absV * cos(theta));
+
+		d.position = float3(p.x + posGap.x * rand(float2(DTid.x, i + 1)) + diff * d.velocity.x,
+			                p.y + p.y * 0.2 * perlin.x,
+			                p.z + posGap.z * rand(float2(DTid.x, i + 2)) + diff * d.velocity.z);
+
 		_AliveBuff2_In.Append(d);
 	}
 }

@@ -96,7 +96,7 @@ public class Waterfall : MonoBehaviour {
     [Range(0.1f, 1.0f)]
     public float Jet = 1.0f;
 
-    const int maxDropsCount = 3000000;
+    const int maxDropsCount = 2000000;
     const int streamLinesCount = 64;
     const int maxEmitQuantity = 128 * streamLinesCount;
     const int numThreadX = 8;
@@ -231,7 +231,7 @@ public class Waterfall : MonoBehaviour {
         DropsMaterial = new Material(DropsRenderShader);
         DropsMaterial.hideFlags = HideFlags.HideAndDontSave;
 
-        PerlinTexture = new RenderTexture(64, 64, 0, RenderTextureFormat.ARGB32);
+        PerlinTexture = new RenderTexture(256, 256, 0, RenderTextureFormat.ARGB32);
         PerlinTexture.hideFlags = HideFlags.DontSave;
         PerlinTexture.filterMode = FilterMode.Point;
         PerlinTexture.wrapMode = TextureWrapMode.Repeat;
@@ -273,9 +273,10 @@ public class Waterfall : MonoBehaviour {
         DropsCS.SetFloat("_DeltaTime", Time.deltaTime);
         DropsCS.SetFloat("_Gravity", g);
         DropsCS.SetFloat("_Jet", Jet);
+        DropsCS.SetFloat("_RandSeed", Random.Range(0, 1.0f));
 
         perlinT++;
-        perlinT = perlinT % 64;
+        perlinT = perlinT % 256;
         DropsCS.SetInt("_PerlinT", perlinT);
 
         // 1 : Emit
