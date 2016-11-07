@@ -17,14 +17,6 @@ struct StreamLine
 	float3 velocity;
 };
 
-struct Drop
-{
-	int streamId;
-	float3 dropSize;
-	float3 position;
-	float3 velocity;
-};
-
 cbuffer CB
 {
 	float _DeltaTime;
