@@ -182,7 +182,7 @@ public class Waterfall : MonoBehaviour {
         for (int i = 0; i < streamLinesCount; i++)
         {
             streams[i].Id = i;
-            streams[i].BirthPosition = new Vector3(Random.Range(EmitterSize.x + i * 0.2f, EmitterSize.x + i * 0.21f),
+            streams[i].BirthPosition = new Vector3(Random.Range(EmitterSize.x + i * 0.1f, EmitterSize.x + i * 0.11f),
                                                    Random.Range(EmitterSize.y - 0.1f, EmitterSize.y + 0.1f),
                                                    Random.Range(EmitterSize.z - 0.1f, EmitterSize.z + 0.1f));
             streams[i].DeathPosition = new Vector3(streams[i].BirthPosition.x,
@@ -204,12 +204,12 @@ public class Waterfall : MonoBehaviour {
         Lines = new GameObject[streamLinesCount];
         for (int i = 0; i < streamLinesCount; i++)
         {
-            Lines[i] = new GameObject("Stream Line [" + i + "]");
-            var lineRenderer = Lines[i].AddComponent<LineRenderer>();
-            lineRenderer.material.shader = Shader.Find("Unlit/Color");
-            lineRenderer.SetVertexCount(11);
-            lineRenderer.SetWidth(0.01f, 0.01f);
-            lineRenderer.SetPositions(GetParabolaPoints(streams[i].BirthPosition, streams[i].DeathPosition, 10));
+            //Lines[i] = new GameObject("Stream Line [" + i + "]");
+            //var lineRenderer = Lines[i].AddComponent<LineRenderer>();
+            //lineRenderer.material.shader = Shader.Find("Unlit/Color");
+            //lineRenderer.SetVertexCount(11);
+            //lineRenderer.SetWidth(0.01f, 0.01f);
+            //lineRenderer.SetPositions(GetParabolaPoints(streams[i].BirthPosition, streams[i].DeathPosition, 10));
         }
         //streams = null;
 
