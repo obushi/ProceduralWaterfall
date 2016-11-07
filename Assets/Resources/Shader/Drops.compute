@@ -14,17 +14,36 @@ cbuffer CB
 {
 	int _StreamsCount;
 	int _PerlinT;
+	float _Gravity;
+	float _DeltaTime;
+	float _Jet;
 }
 
 struct Drop
 {
-	uint id;
+	uint streamId;
 	float dropSize;
 	float3 position;
 	float3 velocity;
 };
 
+struct StreamLine
+{
+	int id;
+	float3 birthPosition;
+	float3 deathPosition;
+	float3 position;
+	float3 initVelocity;
+	float3 velocity;
+};
+
+float rand(float2 co)
+{
+	return frac(sin(dot(co.xy, float2(12.9898, 78.233))) * 43758.5453);
+}
+
 RWStructuredBuffer<Drop> _DropsBuff;
+RWStructuredBuffer<StreamLine> _StreamLinesBuffer;
 
 // Dead
 AppendStructuredBuffer<Drop> _DeadBuff1_In;
@@ -51,19 +70,24 @@ void Init(uint3 DTid : SV_DispatchThreadID)
 [numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
 void Emit(uint3 DTid : SV_DispatchThreadID)
 {
-	float4 v = _PerlinTexture[uint2(DTid.x, _PerlinT)] *  128;
-	for (int i = 0; i < v.x; i++)
+	float4 a = _PerlinTexture[uint2(DTid.x, _PerlinT)] * 16;
+	float emitAmount = round(a.x) * 8;
+	float3 p = _StreamLinesBuffer[DTid.x].birthPosition;
+	float3 v = _StreamLinesBuffer[DTid.x].initVelocity;
+	int nextStreamId = clamp(DTid.x + 1, 0, _StreamsCount - 1);
+	float2 posDiffXZ = _StreamLinesBuffer[nextStreamId].birthPosition.xz - p.xz;
+
+	for (int i = 0; i < emitAmount; i++)
 	{
 		Drop d = _DeadBuff1_Out.Consume();
-		d.dropSize = 0.1f;
-		d.position = float3(DTid.x * 0.1, i * 0.05, 0);
-		d.velocity = float3(0, 1, 0);
-		_AliveBuff2_In.Append(d);
+		d.streamId = DTid.x;
 
-		//uint dropId = _ActiveBuffConsume.Consume();
-		//_DropsBuff[dropId].dropSize = 0.1;
-		//_DropsBuff[dropId].position = float3(0, 0, 0);
-		//_DropsBuff[dropId].velocity = float3(0, 0, 0);
+		d.dropSize = 0.1f;
+		d.position = float3(p.x + posDiffXZ.x * rand(float2(DTid.x, i + 1)),
+			                p.y + p.y * 0.1 * rand(float2(DTid.x, i)),
+			                p.z + posDiffXZ.y * rand(float2(DTid.x, i + 2)));
+		d.velocity = float3(v.x, v.y, v.z);
+		_AliveBuff2_In.Append(d);
 	}
 }
 
@@ -73,26 +97,19 @@ void Emit(uint3 DTid : SV_DispatchThreadID)
 void Update(uint3 DTid : SV_DispatchThreadID)
 {
 	Drop d = _AliveBuff1_Out.Consume();
-	d.velocity += float3(0, 0.1, 0);
-	d.position += d.velocity;
 
-	float3 pos = d.position;
-	if (abs(pos.x) > 10 || abs(pos.y) > 10 || abs(pos.z) > 10) {
+	d.velocity.y += -_Gravity * _DeltaTime * _Jet;
+	d.position.y += d.velocity.y * _DeltaTime * _Jet;
+	d.position.z += d.velocity.z * _DeltaTime * _Jet;
+
+	//float3 pos = d.position;
+	float3 deathPos = _StreamLinesBuffer[d.streamId].deathPosition;
+	if (d.position.y < deathPos.y) {
 		_DeadBuff1_In.Append(d);
-	}
-	else {
+	} else {
 		_AliveBuff2_In.Append(d);
 	}
 }
-
-//// 3 Register
-//
-//[numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
-//void Register(uint3 DTid : SV_DispatchThreadID)
-//{
-//	Drop d = _TempBuffC.Consume();
-//	_InitBuffA.Append(d);
-//}
 
 // 3
 [numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]

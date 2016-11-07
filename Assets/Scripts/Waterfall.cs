@@ -65,7 +65,7 @@ public struct StreamLine
 
 public struct Drop
 {
-    public uint Id;
+    public uint StreamId;
     public float DropSize;
     public Vector3 Position;
     public Vector3 Velocity;
@@ -84,7 +84,7 @@ public class Waterfall : MonoBehaviour {
 
     #region Emitter parameters
 
-    public Vector3 EmitterSize = new Vector3(0, 9, 0);
+    public Vector3 EmitterSize = new Vector3(0, 20, 0);
     public Vector3 EliminatorSize = new Vector3(0, 0, -3);
 
     [Range(0.0005f, 2.0f)]
@@ -93,7 +93,10 @@ public class Waterfall : MonoBehaviour {
     [Range(0.01f, 10.0f)]
     public float g = 4.0f;
 
-    const int maxDropsCount = 20000;
+    [Range(0.1f, 1.0f)]
+    public float Jet = 1.0f;
+
+    const int maxDropsCount = 3000000;
     const int streamLinesCount = 64;
     const int maxEmitQuantity = 128 * streamLinesCount;
     const int numThreadX = 8;
@@ -201,20 +204,20 @@ public class Waterfall : MonoBehaviour {
         Lines = new GameObject[streamLinesCount];
         for (int i = 0; i < streamLinesCount; i++)
         {
-            Lines[i] = new GameObject("Stream Line [" + i + "]");
-            var lineRenderer = Lines[i].AddComponent<LineRenderer>();
-            lineRenderer.material.shader = Shader.Find("Unlit/Color");
-            lineRenderer.SetVertexCount(11);
-            lineRenderer.SetWidth(0.01f, 0.01f);
-            lineRenderer.SetPositions(GetParabolaPoints(streams[i].BirthPosition, streams[i].DeathPosition, 10));
+            //Lines[i] = new GameObject("Stream Line [" + i + "]");
+            //var lineRenderer = Lines[i].AddComponent<LineRenderer>();
+            //lineRenderer.material.shader = Shader.Find("Unlit/Color");
+            //lineRenderer.SetVertexCount(11);
+            //lineRenderer.SetWidth(0.01f, 0.01f);
+            //lineRenderer.SetPositions(GetParabolaPoints(streams[i].BirthPosition, streams[i].DeathPosition, 10));
         }
-        streams = null;
+        //streams = null;
 
         // Setup drops
         var drops = new Drop[maxDropsCount];
         for (int i = 0; i < maxDropsCount; i++)
         {
-            drops[i].Id = (uint)i;
+            drops[i].StreamId = 0;
             drops[i].DropSize = 0.1f;
             drops[i].Position = new Vector3(0, 0, 0);
 
@@ -267,6 +270,9 @@ public class Waterfall : MonoBehaviour {
         //Drops
         int numThreadGroupDrops = maxDropsCount / numThreadX;
         DropsCS.SetInt("_StreamsCount", streamLinesCount);
+        DropsCS.SetFloat("_DeltaTime", Time.deltaTime);
+        DropsCS.SetFloat("_Gravity", g);
+        DropsCS.SetFloat("_Jet", Jet);
 
         perlinT++;
         perlinT = perlinT % 64;
@@ -275,19 +281,36 @@ public class Waterfall : MonoBehaviour {
         // 1 : Emit
         DropsCS.SetBuffer(1, "_DeadBuff1_Out", DeadBuff1);
         DropsCS.SetBuffer(1, "_AliveBuff2_In", AliveBuff2);
+        DropsCS.SetBuffer(1, "_StreamLinesBuffer", StreamLinesBuff);
         DropsCS.SetTexture(1, "_PerlinTexture", PerlinTexture);
+        
         var emitCount = GetActiveBuffSize(DeadBuff1) > maxEmitQuantity ? numThreadGroupStreamLines : 0;
-        //Debug.Log("Dead1 : " + GetActiveBuffSize(DeadBuff1));
-        //Debug.Log("Alive1 : " + GetActiveBuffSize(AliveBuff1));
+        //Debug.Log("1 : Emit");
+        //Debug.Log("[Dead1] Before Emit : " + GetActiveBuffSize(DeadBuff1));
+        //Debug.Log("[Alive1] Before Emit : " + GetActiveBuffSize(AliveBuff1));
+        //Debug.Log("[Alive2] Before Emit : " + GetActiveBuffSize(AliveBuff2));
+
         DropsCS.Dispatch(1, emitCount, 1, 1);
+
+        //Debug.Log("[Dead1] After Emit : " + GetActiveBuffSize(DeadBuff1));
+        //Debug.Log("[Alive1] After Emit : " + GetActiveBuffSize(AliveBuff1));
+        //Debug.Log("[Alive2] After Emit : " + GetActiveBuffSize(AliveBuff2));
+        //Debug.Log("--------------------------------------------------------");
 
         // 2 : Update
         DropsCS.SetBuffer(2, "_AliveBuff1_Out", AliveBuff1);
         DropsCS.SetBuffer(2, "_AliveBuff2_In", AliveBuff2);
         DropsCS.SetBuffer(2, "_DeadBuff1_In", DeadBuff1);
+        DropsCS.SetBuffer(2, "_StreamLinesBuffer", StreamLinesBuff);
         //var updateGroups = GetActiveBuffSize(AliveBuff1) > maxEmitQuantity ? GetActiveBuffSize(AliveBuff1) : 0;
+        //Debug.Log("2 : Update");
 
         DropsCS.Dispatch(2, GetActiveBuffSize(AliveBuff1) / numThreadX, 1, 1);
+
+        //Debug.Log("[Dead1] After Update : " + GetActiveBuffSize(DeadBuff1));
+        //Debug.Log("[Alive1] After Update : " + GetActiveBuffSize(AliveBuff1));
+        //Debug.Log("[Alive2] After Update : " + GetActiveBuffSize(AliveBuff2));
+        //Debug.Log("--------------------------------------------------------");
         
         // vert / geom / frag shader
         var inverseViewMatrix = BillboardCam.worldToCameraMatrix.inverse;
@@ -306,8 +329,8 @@ public class Waterfall : MonoBehaviour {
         DropsMaterial.SetBuffer("_DropsBuff", AliveBuff2);
         Graphics.DrawProcedural(MeshTopology.Points, maxDropsCount);
 
-        Debug.Log("Dead1 : " + GetActiveBuffSize(DeadBuff1));
-        Debug.Log("Alive2 : " + GetActiveBuffSize(AliveBuff2));
+        //Debug.Log("Dead1 : " + GetActiveBuffSize(DeadBuff1));
+        //Debug.Log("Alive2 : " + GetActiveBuffSize(AliveBuff2));
 
         // 3 : Copy
         AliveBuff1.SetCounterValue(0);
@@ -315,8 +338,7 @@ public class Waterfall : MonoBehaviour {
         DropsCS.SetBuffer(3, "_AliveBuff2_Out", AliveBuff2);
         DropsCS.Dispatch(3, GetActiveBuffSize(AliveBuff2) / numThreadX, 1, 1);
 
-        Debug.Log("Alive1 : " + GetActiveBuffSize(AliveBuff1));
-
+        //Debug.Log("Out : " + GetActiveBuffSize(AliveBuff2) + " In : " + GetActiveBuffSize(AliveBuff1));
         //AliveBuff1 = AliveBuff2;
         //AliveBuff2.SetCounterValue(0);
     }
