@@ -5,10 +5,8 @@
 
 	struct Drop
 	{
-		int id;
-		int streamId;
-		float particleSize;
-		float3 dropSize;
+		uint id;
+		float dropSize;
 		float3 position;
 		float3 velocity;
 	};
@@ -26,7 +24,7 @@
 		float4 color : COLOR;
 	};
 
-	StructuredBuffer<Drop> _DropsBuffer;
+	StructuredBuffer<Drop> _DropsBuff;
 	sampler2D _DropTexture;
 	float4 _DropTexture_ST;
 	float _DropSize;
@@ -50,16 +48,16 @@
 
 	v2g vert(uint id : SV_VertexID)
 	{
-		v2g o = (v2g)0;
-		o.position = _DropsBuffer[id].position;
-		o.color = float4(0.3, 0.8, 0.8, 0.1);
+		v2g o;
+		o.position = _DropsBuff[id].position;
+		o.color = float4(0.2, 0.23, 0.23, 0.2);
 		return o;
 	}
 
 	[maxvertexcount(4)]
 	void geom(point v2g In[1], inout TriangleStream<g2f> SpriteStream)
 	{
-		g2f o = (g2f)0;
+		g2f o;
 		[unroll]
 		for (int i = 0; i < 4; i++)
 		{
@@ -82,7 +80,7 @@
 	}
 		ENDCG
 
-		SubShader
+	SubShader
 	{
 		Tags{ "RenderType" = "Transparent" "IgnoreProjector" = "True" "RenderType" = "Transparent" }
 			LOD 100

@@ -1,5 +1,4 @@
 ﻿#pragma kernel CSStreamLines
-#pragma kernel CSDrops
 
 #include "UnityCG.cginc"
 #include "ClassicNoise2D.cginc"
@@ -18,22 +17,10 @@ struct StreamLine
 	float3 velocity;
 };
 
-struct Drop
-{
-	int id;
-	int streamId;
-	float particleSize;
-	float3 dropSize;
-	float3 position;
-	float3 velocity;
-};
-
 cbuffer CB
 {
 	float _DeltaTime;
 	float _Gravity;
-	float3 _EmitterSize;
-	float3 _EliminatorSize;
 }
 
 RWStructuredBuffer<StreamLine> _StreamLinesBuffer;
@@ -64,34 +51,4 @@ void CSStreamLines (uint3 Gid : SV_GroupID,
 
 	_StreamLinesBuffer[i].position = position;
 	_StreamLinesBuffer[i].velocity = velocity;
-}
-
-RWStructuredBuffer<Drop> _DropsBuffer;
-
-[numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
-void CSDrops (uint3 Gid : SV_GroupID,
-	uint3 GTid : SV_GroupThreadID,
-	uint3 DTid : SV_DispatchThreadID,
-	uint GI : SV_GroupIndex)
-{
-	int i = DTid.x;
-
-	float3 position = _DropsBuffer[i].position;
-	float3 velocity = _DropsBuffer[i].velocity;
-	//float3 deathPos = _DropsBuffer[i].deathPosition;
-	float  dt = _DeltaTime;
-
-	velocity.y += -_Gravity * dt;
-
-	position.y += velocity.y * dt;
-	position.z += velocity.z * dt;
-
-	//if (position.y < deathPos.y)
-	//{
-	//	position = _DropsBuffer[i].birthPosition;
-	//	velocity = _DropsBuffer[i].initVelocity;
-	//}
-
-	_DropsBuffer[i].position = position;
-	_DropsBuffer[i].velocity = velocity;
 }
