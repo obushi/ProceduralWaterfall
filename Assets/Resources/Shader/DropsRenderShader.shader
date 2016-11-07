@@ -50,7 +50,7 @@
 	{
 		v2g o;
 		o.position = _DropsBuff[id].position;
-		o.color = float4(0.3, 0.8, 0.8, 0.1);
+		o.color = float4(0.2, 0.23, 0.23, 0.2);
 		return o;
 	}
 

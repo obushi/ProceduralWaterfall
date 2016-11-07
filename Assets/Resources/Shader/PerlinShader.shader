@@ -9,29 +9,6 @@
 	#include "UnityCG.cginc"
 	#include "ClassicNoise2D.cginc"
 
-	//sampler2D _MainTex;
-	//float4 _MainTex_ST;
-
-	//struct appdata
-	//{
-	//	float4 vertex : POSITION;
-	//	float2 uv : TEXCOORD0;
-	//};
-
-	//struct v2f
-	//{
-	//	float2 uv : TEXCOORD0;
-	//	float4 vertex : SV_POSITION;
-	//};
-
-	//v2f vert(appdata v)
-	//{
-	//	v2f o;
-	//	o.vertex = float4((float3)(cnoise(i.uv * 8.0) + 1.0), 1.0);
-	//	o.uv = v.uv;
-	//	return o;
-	//}
-
 	float fbm(float2 st)
 	{
 		float val = 0.0;
