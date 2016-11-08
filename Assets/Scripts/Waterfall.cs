@@ -3,56 +3,6 @@ using System.Collections;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
 
-//public class Guideline
-//{
-//    public struct LineProperty
-//    {
-//        public int Id;
-//        public Vector3 BirthPosition;
-//        public Vector3 DeathPosition;
-//        public Vector3 Position;
-//        public Vector3 InitVelocity;
-//        public Vector3 Velocity;
-//    }
-
-//    public LineProperty Property;
-//    private GameObject Line;
-//    private LineRenderer GuidelineRenderer;
-//    private float gravity;
-
-//    Guideline(int id, Vector3 birthPos, Vector3 deathPos, Vector3 position, Vector3 initVelocity, Vector3 velocity)
-//    {
-//        Line = new GameObject();
-
-//        Property.Id = id;
-//        Property.BirthPosition = birthPos;
-//        Property.DeathPosition = deathPos;
-//        Property.Position = position;
-//        Property.InitVelocity = initVelocity;
-//        Property.Velocity = velocity;
-        
-//        GuidelineRenderer = Line.AddComponent<LineRenderer>();
-//        GuidelineRenderer.material.shader = Shader.Find("Unlit/Color");
-//        GuidelineRenderer.SetPosition(0, Property.BirthPosition);
-//        GuidelineRenderer.SetPosition(1, Property.DeathPosition);
-//    }
-
-//    Vector3[] GetParabolaPoints(int numDivision)
-//    {
-//        List<Vector3> result = new List<Vector3>();
-//        float a = (Property.DeathPosition.y - Property.BirthPosition.y) / Mathf.Pow((Property.DeathPosition.z - Property.BirthPosition.z), 2);
-
-//        for (int i = 0; i < numDivision; i++)
-//        {
-//            float t = i / (float)numDivision;
-//            float x = t * Property.DeathPosition.z - Property.BirthPosition.z;
-//            float y = a * (x - Property.BirthPosition.z) * (x - Property.BirthPosition.z) + Property.BirthPosition.y;
-//            result.Add(new Vector3(0, y, x));
-//        }
-//        return result.ToArray();
-//    }
-//}
-
 public struct StreamLine
 {
     public int Id;
@@ -69,6 +19,7 @@ public struct Drop
     public float DropSize;
     public Vector3 Position;
     public Vector3 Velocity;
+    public Vector4 Params;
 }
 
 public class Waterfall : MonoBehaviour {
@@ -87,8 +38,13 @@ public class Waterfall : MonoBehaviour {
     public Vector3 EmitterSize = new Vector3(0, 20, 0);
     public Vector3 EliminatorSize = new Vector3(0, 0, -3);
 
-    [Range(0.0005f, 2.0f)]
-    public float DropSize = 0.001f;
+    const int maxDropsCount = 10000000;
+    const int streamLinesCount = 128;
+    const int maxEmitQuantity = 128 * streamLinesCount;
+    const int numThreadX = 128;
+    const int numThreadY = 1;
+    const int numThreadZ = 1;
+    private int perlinT = 0;
 
     [Range(0.01f, 10.0f)]
     public float g = 4.0f;
@@ -96,18 +52,23 @@ public class Waterfall : MonoBehaviour {
     [Range(0.1f, 1.0f)]
     public float Jet = 1.0f;
 
-    const int maxDropsCount = 10000000;
-    const int streamLinesCount = 128;
-    const int maxEmitQuantity = 128 * streamLinesCount;
-    const int numThreadX = 8;
-    const int numThreadY = 1;
-    const int numThreadZ = 1;
-    private int perlinT = 0;
+    [SerializeField, Header("Drop / Splash Params")]
+    Vector4 dropParams = new Vector4(1.0f, 1.0f, 1.0f, 0.015f);
+
+    [Range(0.0005f, 0.2f)]
+    public float dropSize = 0.001f;
+
+    [SerializeField]
+    Vector4 splashParams = new Vector4(0.5f, 0.5f, 0.1f, 0.1f);
+
+    [Range(0.0001f, 0.1f)]
+    public float splashSize = 0.001f;
 
     #endregion
 
     #region Stream lines
 
+    [Header("Shaders for Stream Lines")]
     public ComputeShader StreamsCS;
     public ComputeBuffer StreamLinesBuff;
     public Shader StreamLinesRenderShader;
@@ -119,6 +80,7 @@ public class Waterfall : MonoBehaviour {
 
     #region Drop
 
+    [Header("Shaders for Drop")]
     public ComputeShader DropsCS;
 
     public ComputeBuffer DropsBuff;
@@ -136,6 +98,7 @@ public class Waterfall : MonoBehaviour {
 
     #region Noise
 
+    [Header("Shaders for Noise")]
     public RenderTexture PerlinTexture;
     public Shader PerlinShader;
     public Material PerlinMaterial;
@@ -221,13 +184,14 @@ public class Waterfall : MonoBehaviour {
             drops[i].DropSize = 0.1f;
             drops[i].Position = new Vector3(0, 0, 0);
             drops[i].Velocity = Vector3.down;
+            drops[i].Params = new Vector4(1.0f, 1.0f, 1.0f, 1.0f);  // InitVhCoef, InitVvCoef, UpdatePosCoef, UpdateVelCoef
         }
         
         DropsBuff.SetData(drops);
         DropsMaterial = new Material(DropsRenderShader);
         DropsMaterial.hideFlags = HideFlags.HideAndDontSave;
 
-        PerlinTexture = new RenderTexture(128, 128, 0, RenderTextureFormat.ARGB32);
+        PerlinTexture = new RenderTexture(256, 256, 0, RenderTextureFormat.ARGB32);
         PerlinTexture.hideFlags = HideFlags.DontSave;
         PerlinTexture.filterMode = FilterMode.Point;
         PerlinTexture.wrapMode = TextureWrapMode.Repeat;
@@ -271,8 +235,13 @@ public class Waterfall : MonoBehaviour {
         DropsCS.SetFloat("_RandSeed", Random.Range(0, 1.0f));
 
         perlinT++;
-        perlinT = perlinT % 128;
+        perlinT = perlinT % 256;
         DropsCS.SetInt("_PerlinT", perlinT);
+
+        DropsCS.SetVector("_DropParams", dropParams);
+        DropsCS.SetFloat("_DropSize", dropSize);
+        DropsCS.SetVector("_SplashParams", splashParams);
+        DropsCS.SetFloat("_SplashSize", splashSize);
 
         // 1 : Emit
         DropsCS.SetBuffer(1, "_DeadBuff1_Out", DeadBuff1);
@@ -314,14 +283,14 @@ public class Waterfall : MonoBehaviour {
         StreamLinesMaterial.SetPass(0);
         StreamLinesMaterial.SetMatrix("_InvViewMatrix", inverseViewMatrix);
         StreamLinesMaterial.SetTexture("_DropTexture", DropTexture);
-        StreamLinesMaterial.SetFloat("_DropSize", DropSize);
+        StreamLinesMaterial.SetFloat("_DropSize", dropSize);
         StreamLinesMaterial.SetBuffer("_StreamLinesBuffer", StreamLinesBuff);
         Graphics.DrawProcedural(MeshTopology.Points, streamLinesCount);
 
         DropsMaterial.SetPass(0);
         DropsMaterial.SetMatrix("_InvViewMatrix", inverseViewMatrix);
         DropsMaterial.SetTexture("_DropTexture", DropTexture);
-        DropsMaterial.SetFloat("_DropSize", DropSize);
+        DropsMaterial.SetFloat("_DropSize", dropSize);
         DropsMaterial.SetBuffer("_DropsBuff", AliveBuff2);
         Graphics.DrawProcedural(MeshTopology.Points, GetActiveBuffSize(AliveBuff2));
 
