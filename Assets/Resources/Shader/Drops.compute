@@ -82,14 +82,14 @@ void Emit(uint3 DTid : SV_DispatchThreadID)
 	// Velocity
 	float theta = cnoise(float2(DTid.x, _RandSeed)) * radians(45);
 	float3 v = _StreamLinesBuffer[DTid.x].initVelocity;
-	float absV = length(v.xz);
+	float absV = length(v.yz);
 
 	// Position
 	float4 perlin = _PerlinTexture[uint2(DTid.x, _PerlinT)];
-	float emitDropAmount = perlin.x * 8 * 4;
-	float emitSplashAmount = perlin.x * 8 * 8;
+	float emitDropAmount = pow(2, perlin.x * 7);
+	float emitSplashAmount = pow(2, perlin.x * 7);
 	float3 p = _StreamLinesBuffer[DTid.x].birthPosition;
-	int nextStreamId = clamp(DTid.x + 1, 0, _StreamsCount - 2);
+	int nextStreamId = clamp(DTid.x + 1, 0, _StreamsCount - 1);
 	float3 posGap = _StreamLinesBuffer[nextStreamId].birthPosition - p;
 	float diff = 2.0 * (1.0 - perlin.x) * rand(float2(_RandSeed, DTid.x));
 
@@ -107,6 +107,7 @@ void Emit(uint3 DTid : SV_DispatchThreadID)
 		d.position = float3(p.x + posGap.x * rand(float2(DTid.x, i + 1)) + diff * d.velocity.x,
 			                p.y + 0.3 * perlin.x,
 			                p.z + posGap.z * rand(float2(DTid.x, i + 2)) + diff * d.velocity.z);
+
 		d.prevPosition = d.position;
 
 		_AliveBuff2_In.Append(d);
@@ -124,8 +125,9 @@ void Emit(uint3 DTid : SV_DispatchThreadID)
 			                v.z - d.params.x * absV * cos(theta));
 
 		d.position = float3(p.x + posGap.x * rand(float2(DTid.x, j + 1)) + diff * d.velocity.x,
-			                p.y + 0.3 * perlin.x,
+			                p.y + 0.6 * perlin.x,
 			                p.z + posGap.z * rand(float2(DTid.x, j + 2)) + diff * d.velocity.z);
+
 		d.prevPosition = d.position;
 
 		_AliveBuff2_In.Append(d);
@@ -143,9 +145,9 @@ void Update(uint3 DTid : SV_DispatchThreadID)
 
 	float3 p = d.position;
 	float3 v = d.velocity;
-	d.position = float3(p.x + v.x * d.params.w * d.params.z * (1.0 + rand(float2(DTid.x, _RandSeed * 5.0))) * _DeltaTime,
+	d.position = float3(p.x + v.x * d.params.w * d.params.z * (1.0 + rand(float2(DTid.x, _RandSeed * 5.0 * d.params.z))) * _DeltaTime,
 		                p.y + v.y * d.params.z * _DeltaTime,
-		                p.z + v.z * d.params.w * d.params.z * (1.0 + rand(float2(DTid.x, _RandSeed * 6.0)) * _DeltaTime));
+		                p.z + v.z * d.params.w * d.params.z * (1.0 + rand(float2(DTid.x, _RandSeed * 6.0 * d.params.w)) * _DeltaTime));
 
 	d.prevPosition = p;
 

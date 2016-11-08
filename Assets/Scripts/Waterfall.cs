@@ -146,7 +146,7 @@ public class Waterfall : MonoBehaviour {
         for (int i = 0; i < streamLinesCount; i++)
         {
             streams[i].Id = i;
-            streams[i].BirthPosition = new Vector3(Random.Range(EmitterSize.x + i * 0.05f, EmitterSize.x + i * 0.055f),
+            streams[i].BirthPosition = new Vector3(Random.Range(EmitterSize.x + i * 0.05f, EmitterSize.x + i * 0.052f),
                                                    Random.Range(EmitterSize.y - 0.1f, EmitterSize.y + 0.1f),
                                                    Random.Range(EmitterSize.z - 0.1f, EmitterSize.z + 0.1f));
             streams[i].DeathPosition = new Vector3(streams[i].BirthPosition.x,
@@ -157,7 +157,7 @@ public class Waterfall : MonoBehaviour {
             var dz = streams[i].DeathPosition.z - streams[i].BirthPosition.z;
             var dy = streams[i].DeathPosition.y - streams[i].BirthPosition.y;
 
-            streams[i].InitVelocity = new Vector3(0, Random.Range(-1.0f, 1.0f), -Mathf.Sqrt((g * dz * dz) / (2 * Mathf.Abs(dy))));
+            streams[i].InitVelocity = new Vector3(Random.Range(-0.5f, 0.5f), Random.Range(-1.0f, 1.0f), -Mathf.Sqrt((g * dz * dz) / (2 * Mathf.Abs(dy))));
             streams[i].Velocity = streams[i].InitVelocity;
         }
         StreamLinesBuff.SetData(streams);
@@ -222,12 +222,12 @@ public class Waterfall : MonoBehaviour {
     void OnRenderObject()
     {
         // Stream Lines
-        StreamsCS.SetFloat("_DeltaTime", Time.deltaTime);
-        StreamsCS.SetFloat("_Gravity", g);
+        //StreamsCS.SetFloat("_DeltaTime", Time.deltaTime);
+        //StreamsCS.SetFloat("_Gravity", g);
 
         int numThreadGroupStreamLines = streamLinesCount / numThreadX;
-        StreamsCS.SetBuffer(0, "_StreamLinesBuffer", StreamLinesBuff);
-        StreamsCS.Dispatch(0, numThreadGroupStreamLines, 1, 1);
+        //StreamsCS.SetBuffer(0, "_StreamLinesBuffer", StreamLinesBuff);
+        //StreamsCS.Dispatch(0, numThreadGroupStreamLines, 1, 1);
 
         //Drops
         DropsCS.SetInt("_StreamsCount", streamLinesCount);

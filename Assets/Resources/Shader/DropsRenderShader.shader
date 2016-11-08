@@ -63,7 +63,7 @@
 		o.position.xyz = _DropsBuff[id].position;
 		o.position.w = _DropsBuff[id].dropSize;
 		o.prevPosition = _DropsBuff[id].prevPosition;
-		o.color = float4(0.2, 0.23, 0.23, 0.2);
+		o.color = float4(0.1, 0.11, 0.11, 0.12);
 		return o;
 	}
 
@@ -108,7 +108,7 @@
 	SubShader
 	{
 		Tags{ "RenderType" = "Transparent" "IgnoreProjector" = "True" "RenderType" = "Transparent" }
-			//LOD 100
+			LOD 100
 
 			Zwrite Off
 			Blend One One
