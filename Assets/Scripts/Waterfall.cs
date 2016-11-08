@@ -18,6 +18,7 @@ public struct Drop
     public uint StreamId;
     public float DropSize;
     public Vector3 Position;
+    public Vector3 PrevPosition;
     public Vector3 Velocity;
     public Vector4 Params;
 }
@@ -145,7 +146,7 @@ public class Waterfall : MonoBehaviour {
         for (int i = 0; i < streamLinesCount; i++)
         {
             streams[i].Id = i;
-            streams[i].BirthPosition = new Vector3(Random.Range(EmitterSize.x + i * 0.1f, EmitterSize.x + i * 0.11f),
+            streams[i].BirthPosition = new Vector3(Random.Range(EmitterSize.x + i * 0.05f, EmitterSize.x + i * 0.055f),
                                                    Random.Range(EmitterSize.y - 0.1f, EmitterSize.y + 0.1f),
                                                    Random.Range(EmitterSize.z - 0.1f, EmitterSize.z + 0.1f));
             streams[i].DeathPosition = new Vector3(streams[i].BirthPosition.x,
@@ -182,7 +183,8 @@ public class Waterfall : MonoBehaviour {
         {
             drops[i].StreamId = 0;
             drops[i].DropSize = 0.1f;
-            drops[i].Position = new Vector3(0, 0, 0);
+            drops[i].Position = Vector3.zero;
+            drops[i].PrevPosition = Vector3.zero;
             drops[i].Velocity = Vector3.down;
             drops[i].Params = new Vector4(1.0f, 1.0f, 1.0f, 1.0f);  // InitVhCoef, InitVvCoef, UpdatePosCoef, UpdateVelCoef
         }

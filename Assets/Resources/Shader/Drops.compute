@@ -30,6 +30,7 @@ struct Drop
 	uint streamId;
 	float dropSize;
 	float3 position;
+	float3 prevPosition;
 	float3 velocity;
 	float4 params; // InitVhCoef, InitVvCoef, UpdatePosCoef, UpdateVelCoef
 };
@@ -106,6 +107,7 @@ void Emit(uint3 DTid : SV_DispatchThreadID)
 		d.position = float3(p.x + posGap.x * rand(float2(DTid.x, i + 1)) + diff * d.velocity.x,
 			                p.y + 0.3 * perlin.x,
 			                p.z + posGap.z * rand(float2(DTid.x, i + 2)) + diff * d.velocity.z);
+		d.prevPosition = d.position;
 
 		_AliveBuff2_In.Append(d);
 	}
@@ -124,6 +126,7 @@ void Emit(uint3 DTid : SV_DispatchThreadID)
 		d.position = float3(p.x + posGap.x * rand(float2(DTid.x, j + 1)) + diff * d.velocity.x,
 			                p.y + 0.3 * perlin.x,
 			                p.z + posGap.z * rand(float2(DTid.x, j + 2)) + diff * d.velocity.z);
+		d.prevPosition = d.position;
 
 		_AliveBuff2_In.Append(d);
 	}
@@ -143,6 +146,8 @@ void Update(uint3 DTid : SV_DispatchThreadID)
 	d.position = float3(p.x + v.x * d.params.w * d.params.z * (1.0 + rand(float2(DTid.x, _RandSeed * 5.0))) * _DeltaTime,
 		                p.y + v.y * d.params.z * _DeltaTime,
 		                p.z + v.z * d.params.w * d.params.z * (1.0 + rand(float2(DTid.x, _RandSeed * 6.0)) * _DeltaTime));
+
+	d.prevPosition = p;
 
 	float3 deathPos = _StreamLinesBuffer[d.streamId].deathPosition;
 
