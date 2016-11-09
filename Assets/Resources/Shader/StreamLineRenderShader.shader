@@ -86,7 +86,7 @@
 	{
 		Tags{ "RenderType" = "Transparent" "IgnoreProjector" = "True" "RenderType" = "Transparent" }
 		LOD 100
-
+		ZTest Off
 		Zwrite Off
 		Blend One One
 		Cull Off
