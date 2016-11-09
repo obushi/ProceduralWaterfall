@@ -218,7 +218,11 @@ public class Waterfall : MonoBehaviour {
         return args[0];
     }
 
-    //int oldCount;
+    void Update()
+    {
+        Graphics.Blit(null, PerlinTexture, PerlinMaterial, 0);
+    }
+
     void OnRenderObject()
     {
         // Stream Lines
