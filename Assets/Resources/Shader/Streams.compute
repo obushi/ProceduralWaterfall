@@ -19,8 +19,8 @@ struct StreamLine
 
 cbuffer CB
 {
-	float _DeltaTime;
 	float _Gravity;
+	float _DeltaTime;
 }
 
 RWStructuredBuffer<StreamLine> _StreamLinesBuffer;

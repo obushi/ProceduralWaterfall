@@ -6,18 +6,23 @@
 #include "UnityCG.cginc"
 #include "ClassicNoise2D.cginc"
 
-#define NUM_THREAD_X 8
+
+#define NUM_THREAD_X 128
 #define NUM_THREAD_Y 1
 #define NUM_THREAD_Z 1
 
 cbuffer CB
 {
 	int _StreamsCount;
-	int _PerlinT;
 	float _Gravity;
 	float _DeltaTime;
 	float _Jet;
 	float _RandSeed;
+
+	float4 _DropParams;
+	float _DropSize;
+	float4 _SplashParams;
+	float _SplashSize;
 }
 
 struct Drop
@@ -25,7 +30,9 @@ struct Drop
 	uint streamId;
 	float dropSize;
 	float3 position;
+	float3 prevPosition;
 	float3 velocity;
+	float4 params; // InitVhCoef, InitVvCoef, UpdatePosCoef, UpdateVelCoef
 };
 
 struct StreamLine
@@ -75,30 +82,53 @@ void Emit(uint3 DTid : SV_DispatchThreadID)
 	// Velocity
 	float theta = cnoise(float2(DTid.x, _RandSeed)) * radians(45);
 	float3 v = _StreamLinesBuffer[DTid.x].initVelocity;
-	float absV = length(v.xz);
+	float absV = length(v.yz);
 
 	// Position
-	float4 perlin = _PerlinTexture[uint2(DTid.x, _PerlinT)];
-	float emitAmount = perlin.x * 8 * 16;
+	float4 perlin = _PerlinTexture[uint2(DTid.x, _StreamsCount * 0.5)];
+	float emitDropAmount = pow(2, perlin.x * 7);
+	float emitSplashAmount = pow(2, perlin.x * 7);
 	float3 p = _StreamLinesBuffer[DTid.x].birthPosition;
 	int nextStreamId = clamp(DTid.x + 1, 0, _StreamsCount - 1);
 	float3 posGap = _StreamLinesBuffer[nextStreamId].birthPosition - p;
 	float diff = 2.0 * (1.0 - perlin.x) * rand(float2(_RandSeed, DTid.x));
 
-	for (int i = 0; i < emitAmount; i++)
+	for (int i = 0; i < emitDropAmount; i++)
 	{
 		Drop d = _DeadBuff1_Out.Consume();
 		d.streamId = DTid.x;
+		d.dropSize = _DropSize;
+		d.params   = _DropParams;
 
-		d.dropSize = 0.1f;
-
-		d.velocity = float3(v.x + 1.0 * absV * sin(theta),
-			                v.y - 1.0 * v.y * rand(float2(DTid.x, i + 3)),
-			                v.z - 1.0 * absV * cos(theta));
+		d.velocity = float3(v.x + d.params.x * absV * sin(theta),
+			                v.y - d.params.y * v.y * rand(float2(DTid.x, i + 3)),
+			                v.z - d.params.x * absV * cos(theta));
 
 		d.position = float3(p.x + posGap.x * rand(float2(DTid.x, i + 1)) + diff * d.velocity.x,
 			                p.y + 0.3 * perlin.x,
 			                p.z + posGap.z * rand(float2(DTid.x, i + 2)) + diff * d.velocity.z);
+
+		d.prevPosition = d.position;
+
+		_AliveBuff2_In.Append(d);
+	}
+
+	for (int j = 0; j < emitSplashAmount; j++)
+	{
+		Drop d = _DeadBuff1_Out.Consume();
+		d.streamId = DTid.x;
+		d.dropSize = _SplashSize;
+		d.params   = _SplashParams;
+
+		d.velocity = float3(v.x + d.params.x * absV * sin(theta),
+			                v.y - d.params.y * v.y * rand(float2(DTid.x, j + 3)),
+			                v.z - d.params.x * absV * cos(theta));
+
+		d.position = float3(p.x + posGap.x * rand(float2(DTid.x, j + 1)) + diff * d.velocity.x,
+			                p.y + 0.6 * perlin.x,
+			                p.z + posGap.z * rand(float2(DTid.x, j + 2)) + diff * d.velocity.z);
+
+		d.prevPosition = d.position;
 
 		_AliveBuff2_In.Append(d);
 	}
@@ -115,9 +145,11 @@ void Update(uint3 DTid : SV_DispatchThreadID)
 
 	float3 p = d.position;
 	float3 v = d.velocity;
-	d.position = float3(p.x + v.x * 0.01 * (1.0 + rand(float2(DTid.x, _RandSeed))) * _DeltaTime,
-		                p.y + v.y * _DeltaTime,
-		                p.z + v.z * 0.02 * (1.0 + rand(float2(DTid.x, _RandSeed + 2)) * _DeltaTime));
+	d.position = float3(p.x + v.x * d.params.w * d.params.z * (1.0 + rand(float2(DTid.x, _RandSeed * 5.0 * d.params.z))) * _DeltaTime,
+		                p.y + v.y * d.params.z * _DeltaTime,
+		                p.z + v.z * d.params.w * d.params.z * (1.0 + rand(float2(DTid.x, _RandSeed * 6.0 * d.params.w)) * _DeltaTime));
+
+	d.prevPosition = p;
 
 	float3 deathPos = _StreamLinesBuffer[d.streamId].deathPosition;
 
@@ -128,7 +160,7 @@ void Update(uint3 DTid : SV_DispatchThreadID)
 	}
 }
 
-// 3
+// 3 Move
 [numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
 void Move(uint3 DTid : SV_DispatchThreadID)
 {

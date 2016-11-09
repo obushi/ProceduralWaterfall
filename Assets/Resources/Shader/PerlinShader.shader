@@ -18,15 +18,15 @@
 		for (int i = 0; i < 4; i++)
 		{
 			val += amp * (cnoise(st) * 0.5 + 0.5);
-			st *= 2.0;
-			amp *= 0.5;
+			st *= 1.5;
+			amp *= 0.667;
 		}
 		return val;
 	}
 
 	float4 frag(v2f_img i) : SV_Target
 	{
-		float3 color = (float3)fbm(i.uv * 10 + float2(0, _Time.y));
+		float3 color = (float3)fbm(i.uv * 4 + float2(0, _Time.w));
 		return float4(color, 1.0);
 	}
 	ENDCG
