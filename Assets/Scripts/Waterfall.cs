@@ -45,7 +45,6 @@ public class Waterfall : MonoBehaviour {
     const int numThreadX = 128;
     const int numThreadY = 1;
     const int numThreadZ = 1;
-    private int perlinT = 0;
 
     [Range(0.01f, 10.0f)]
     public float g = 4.0f;
@@ -146,7 +145,7 @@ public class Waterfall : MonoBehaviour {
         for (int i = 0; i < streamLinesCount; i++)
         {
             streams[i].Id = i;
-            streams[i].BirthPosition = new Vector3(Random.Range(EmitterSize.x + i * 0.05f, EmitterSize.x + i * 0.052f),
+            streams[i].BirthPosition = new Vector3(EmitterSize.x + i * 0.05f,
                                                    Random.Range(EmitterSize.y - 0.1f, EmitterSize.y + 0.1f),
                                                    Random.Range(EmitterSize.z - 0.1f, EmitterSize.z + 0.1f));
             streams[i].DeathPosition = new Vector3(streams[i].BirthPosition.x,
@@ -157,7 +156,7 @@ public class Waterfall : MonoBehaviour {
             var dz = streams[i].DeathPosition.z - streams[i].BirthPosition.z;
             var dy = streams[i].DeathPosition.y - streams[i].BirthPosition.y;
 
-            streams[i].InitVelocity = new Vector3(Random.Range(-0.5f, 0.5f), Random.Range(-1.0f, 1.0f), -Mathf.Sqrt((g * dz * dz) / (2 * Mathf.Abs(dy))));
+            streams[i].InitVelocity = new Vector3(Random.Range(-1.2f, 1.2f), Random.Range(-1.0f, 1.0f), -Mathf.Sqrt((g * dz * dz) / (2 * Mathf.Abs(dy))));
             streams[i].Velocity = streams[i].InitVelocity;
         }
         StreamLinesBuff.SetData(streams);
@@ -193,7 +192,7 @@ public class Waterfall : MonoBehaviour {
         DropsMaterial = new Material(DropsRenderShader);
         DropsMaterial.hideFlags = HideFlags.HideAndDontSave;
 
-        PerlinTexture = new RenderTexture(256, 256, 0, RenderTextureFormat.ARGB32);
+        PerlinTexture = new RenderTexture(128, 128, 0, RenderTextureFormat.ARGB32);
         PerlinTexture.hideFlags = HideFlags.DontSave;
         PerlinTexture.filterMode = FilterMode.Point;
         PerlinTexture.wrapMode = TextureWrapMode.Repeat;
@@ -220,7 +219,10 @@ public class Waterfall : MonoBehaviour {
 
     void Update()
     {
-        Graphics.Blit(null, PerlinTexture, PerlinMaterial, 0);
+        RenderTexture rt = RenderTexture.GetTemporary(PerlinTexture.width, PerlinTexture.height, 0);
+        Graphics.Blit(PerlinTexture, rt, PerlinMaterial, 0);
+        Graphics.Blit(rt, PerlinTexture);
+        rt.Release();
     }
 
     void OnRenderObject()
@@ -239,10 +241,6 @@ public class Waterfall : MonoBehaviour {
         DropsCS.SetFloat("_Gravity", g);
         DropsCS.SetFloat("_Jet", Jet);
         DropsCS.SetFloat("_RandSeed", Random.Range(0, 1.0f));
-
-        perlinT++;
-        perlinT = perlinT % 256;
-        DropsCS.SetInt("_PerlinT", perlinT);
 
         DropsCS.SetVector("_DropParams", dropParams);
         DropsCS.SetFloat("_DropSize", dropSize);
@@ -286,12 +284,12 @@ public class Waterfall : MonoBehaviour {
         // vert / geom / frag shader
         var inverseViewMatrix = BillboardCam.worldToCameraMatrix.inverse;
 
-        StreamLinesMaterial.SetPass(0);
-        StreamLinesMaterial.SetMatrix("_InvViewMatrix", inverseViewMatrix);
-        StreamLinesMaterial.SetTexture("_DropTexture", DropTexture);
-        StreamLinesMaterial.SetFloat("_DropSize", dropSize);
-        StreamLinesMaterial.SetBuffer("_StreamLinesBuffer", StreamLinesBuff);
-        Graphics.DrawProcedural(MeshTopology.Points, streamLinesCount);
+        //StreamLinesMaterial.SetPass(0);
+        //StreamLinesMaterial.SetMatrix("_InvViewMatrix", inverseViewMatrix);
+        //StreamLinesMaterial.SetTexture("_DropTexture", DropTexture);
+        //StreamLinesMaterial.SetFloat("_DropSize", dropSize);
+        //StreamLinesMaterial.SetBuffer("_StreamLinesBuffer", StreamLinesBuff);
+        //Graphics.DrawProcedural(MeshTopology.Points, streamLinesCount);
 
         DropsMaterial.SetPass(0);
         DropsMaterial.SetMatrix("_InvViewMatrix", inverseViewMatrix);

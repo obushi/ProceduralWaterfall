@@ -6,6 +6,7 @@
 #include "UnityCG.cginc"
 #include "ClassicNoise2D.cginc"
 
+
 #define NUM_THREAD_X 128
 #define NUM_THREAD_Y 1
 #define NUM_THREAD_Z 1
@@ -13,7 +14,6 @@
 cbuffer CB
 {
 	int _StreamsCount;
-	int _PerlinT;
 	float _Gravity;
 	float _DeltaTime;
 	float _Jet;
@@ -85,8 +85,8 @@ void Emit(uint3 DTid : SV_DispatchThreadID)
 	float absV = length(v.yz);
 
 	// Position
-	float4 perlin = _PerlinTexture[uint2(DTid.x, _PerlinT)];
-	float emitDropAmount = pow(2, perlin.x * 7);
+	float4 perlin = _PerlinTexture[uint2(DTid.x, _StreamsCount * 0.5)];
+	float emitDropAmount = pow(2, perlin.x * 8);
 	float emitSplashAmount = pow(2, perlin.x * 7);
 	float3 p = _StreamLinesBuffer[DTid.x].birthPosition;
 	int nextStreamId = clamp(DTid.x + 1, 0, _StreamsCount - 1);
