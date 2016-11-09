@@ -217,6 +217,12 @@ public class Waterfall : MonoBehaviour {
         return args[0];
     }
 
+    ComputeBuffer GetActiveBuff(ComputeBuffer cb)
+    {
+        ComputeBuffer.CopyCount(cb, BuffArgs, 0);
+        return BuffArgs;
+    }
+
     void Update()
     {
         RenderTexture rt = RenderTexture.GetTemporary(PerlinTexture.width, PerlinTexture.height, 0);
@@ -296,7 +302,8 @@ public class Waterfall : MonoBehaviour {
         DropsMaterial.SetTexture("_DropTexture", DropTexture);
         DropsMaterial.SetFloat("_DropSize", dropSize);
         DropsMaterial.SetBuffer("_DropsBuff", AliveBuff2);
-        Graphics.DrawProcedural(MeshTopology.Points, GetActiveBuffSize(AliveBuff2));
+        Graphics.DrawProceduralIndirect(MeshTopology.Points, GetActiveBuff(AliveBuff2));
+
 
         //Debug.Log("Dead1 : " + GetActiveBuffSize(DeadBuff1));
         //Debug.Log("Alive2 : " + GetActiveBuffSize(AliveBuff2));
