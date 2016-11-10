@@ -87,7 +87,7 @@
 		Tags{ "RenderType" = "Transparent" "IgnoreProjector" = "True" "RenderType" = "Transparent" }
 		LOD 100
 
-		Zwrite Off
+		Zwrite On
 		Blend One One
 		Cull Off
 
