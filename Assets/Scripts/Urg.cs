@@ -425,39 +425,60 @@ using System.Linq;
 
 public class Urg : MonoBehaviour
 {
-
+    #region Device Config
     [SerializeField]
     UrgDeviceEthernet urg;
 
     [SerializeField]
-    string ipAddress = "192.168.0.35";
+    const string ipAddress = "192.168.0.35";
+
     [SerializeField]
-    int portNumber = 10940;
+    const int portNumber = 10940;
 
-    public float scale = 0.001f; // mm -> m
-    public float distanceThreshold = 300.0f;//mm
+    [SerializeField]
+    const int beginId = 360;
 
-    public Color distanceColor = Color.white;
-    public Color[] groupColors;
+    [SerializeField]
+    const int endId = 720;
+    #endregion
 
-    long[] rawDistances;
+    #region Thresholds
+    [SerializeField]
+    float distanceThreshold = 300.0f;//mm
 
-    public bool debugDraw = false;
-    public Vector2 offsetPosition = new Vector2(0, 12.4f);
-    public float gapThreshold = 40;
-    public float streakThreshold = 10;
-    public float detectObjThreshold = 10;
+    [SerializeField]
+    float gapThreshold = 40;
 
-    bool enableGui = true;
+    [SerializeField]
+    float streakThreshold = 10;
 
+    [SerializeField]
+    float detectObjThreshold = 10;
+    #endregion
+
+    #region Debug
+    [SerializeField]
+    float scale = 0.001f; // mm -> m
+
+    [SerializeField]
+    Vector2 posOffset = new Vector2(0, 12.4f);
+
+    [SerializeField]
+    bool debugDraw = false;
+
+    [SerializeField]
+    bool drawGui = true;
+    #endregion
+    
+    public MeshFilter meshFilter;
     public Mesh mesh;
-
-    public GameObject detectedSphere;
+    List<long> rawDistances;
 
     // Use this for initialization
     void Start()
     {
-        rawDistances = new long[1081];
+        rawDistances = new List<long>();
+        meshFilter = GetComponent<MeshFilter>();
         mesh = new Mesh();
 
         urg = gameObject.AddComponent<UrgDeviceEthernet>();
@@ -467,68 +488,19 @@ public class Urg : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+
         if (Input.GetKeyDown(KeyCode.G))
-            enableGui = !enableGui;
+            drawGui = !drawGui;
 
-        // distances
-        if (urg.distances.Count == 1081)
+        //if (rawDistances != urg.distances.ToArray())
+        //{
+        //    rawDistances = urg.distances.ToArray();
+        //}
+        rawDistances = urg.distances;
+
+        if (debugDraw)
         {
-            if (rawDistances != urg.distances.ToArray())
-            {
-                rawDistances = urg.distances.ToArray();
-            }
-
-            List<Vector3> vertList = new List<Vector3>();
-            List<Vector2> uvList = new List<Vector2>();
-            List<int> indexList = new List<int>();
-            //vertList.Add(scale * offsetPosition);
-            //uvList.Add(Camera.main.WorldToViewportPoint(scale * offsetPosition));
-
-            for (int i = rawDistances.Length - 1; i > 0; i--)
-            {
-                vertList.Add(scale * (Index2Position(i, rawDistances) + (Vector3)offsetPosition));
-                vertList.Add(scale * (Index2Position(i, rawDistances) + (Vector3)offsetPosition) + Vector3.forward);
-                vertList.Add(scale * (Index2Position(i-1, rawDistances) + (Vector3)offsetPosition));
-                vertList.Add(scale * (Index2Position(i-1, rawDistances) + (Vector3)offsetPosition));
-                vertList.Add(scale * (Index2Position(i, rawDistances) + (Vector3)offsetPosition) + Vector3.forward);
-                vertList.Add(scale * (Index2Position(i-1, rawDistances) + (Vector3)offsetPosition) + Vector3.forward);
-                uvList.Add(Camera.main.WorldToViewportPoint(scale * (Index2Position(i, rawDistances) + (Vector3)offsetPosition)));
-                uvList.Add(Camera.main.WorldToViewportPoint(scale * (Index2Position(i, rawDistances) + (Vector3)offsetPosition + Vector3.forward)));
-                uvList.Add(Camera.main.WorldToViewportPoint(scale * (Index2Position(i-1, rawDistances) + (Vector3)offsetPosition)));
-                uvList.Add(Camera.main.WorldToViewportPoint(scale * (Index2Position(i - 1, rawDistances) + (Vector3)offsetPosition)));
-                uvList.Add(Camera.main.WorldToViewportPoint(scale * (Index2Position(i, rawDistances) + (Vector3)offsetPosition + Vector3.forward)));
-                uvList.Add(Camera.main.WorldToViewportPoint(scale * (Index2Position(i-1, rawDistances) + (Vector3)offsetPosition + Vector3.forward)));
-            }
-            vertList.Add(scale * (Index2Position(0, rawDistances) + (Vector3)offsetPosition));
-            uvList.Add(Camera.main.WorldToViewportPoint(scale * (Index2Position(0, rawDistances) + (Vector3)offsetPosition)));
-
-            for (int i = 0; i < rawDistances.Length - 1; i++)
-            {
-                indexList.AddRange(new int[] { i*6, i*6+1, i*6+2 });
-                indexList.AddRange(new int[] { i*6+3, i*6+4, i*6+5 });
-            }
-
-            //for (int i = rawDistances.Length - 1; i >= 0; i--)
-            //{
-            //    vertList.Add(scale * (Index2Position(i, rawDistances) + (Vector3)offsetPosition));
-            //    uvList.Add(Camera.main.WorldToViewportPoint(scale * (Index2Position(i, rawDistances) + (Vector3)offsetPosition)));
-            //}
-
-            //for (int i = 0; i < rawDistances.Length - 1; i++)
-            //{
-            //    indexList.AddRange(new int[] { 0, i + 1, i + 2 });
-            //}
-
-            GetComponent<MeshFilter>().sharedMesh = mesh;
-            mesh.name = "rawData";
-            mesh.vertices = vertList.ToArray();
-            mesh.uv = uvList.ToArray();
-            mesh.triangles = indexList.ToArray();
-
-
-            //if (mesh.triangles.Length != 3240)
-            //    Debug.Log(mesh.triangles.Length);
-
+            UpdateMeshFilter();
         }
     }
 
@@ -552,16 +524,43 @@ public class Urg : MonoBehaviour
     {
         Assert.IsTrue(index >= 0 && index <= 1081);
         return new Vector3(distances[index] * Mathf.Cos(Index2Rad(index)),
-                            distances[index] * Mathf.Sin(Index2Rad(index)));
+                           distances[index] * Mathf.Sin(Index2Rad(index)));
+    }
+
+    void UpdateMeshFilter()
+    {
+        var distances = rawDistances.ToArray();
+        List<Vector3> vertList = new List<Vector3>();
+        List<Vector2> uvList = new List<Vector2>();
+        List<int> indexList = new List<int>();
+        vertList.Add(scale * posOffset);
+        uvList.Add(Camera.main.WorldToViewportPoint(scale * posOffset));
+
+        for (int i = distances.Length - 1; i >= 0; i--)
+        {
+            vertList.Add(scale * (Index2Position(i, distances) + (Vector3)posOffset));
+            uvList.Add(Camera.main.WorldToViewportPoint(scale * (Index2Position(i, distances) + (Vector3)posOffset)));
+        }
+
+        for (int i = 0; i < distances.Length - 1; i++)
+        {
+            indexList.AddRange(new int[] { 0, i + 1, i + 2 });
+        }
+        
+        mesh.name = "URG Data";
+        mesh.vertices = vertList.ToArray();
+        mesh.uv = uvList.ToArray();
+        mesh.triangles = indexList.ToArray();
+        meshFilter.sharedMesh = mesh;
     }
 
     void OnGUI()
     {
-        if (enableGui)
+        if (drawGui)
         {
             if (GUILayout.Button("MD: (計測＆送信要求)"))
             {
-                urg.Write(SCIP_library.SCIP_Writer.MD(0, 1080, 1, 0, 0));
+                urg.Write(SCIP_library.SCIP_Writer.MD(360, 720, 1, 0, 0));
             }
             if (GUILayout.Button("QUIT"))
             {
@@ -571,12 +570,13 @@ public class Urg : MonoBehaviour
             scale = GUILayout.HorizontalSlider(scale, 0, 0.05f);
             GUILayout.Label("Scale" + scale);
 
-            offsetPosition.x = GUILayout.HorizontalSlider(offsetPosition.x, -10000, 10000);
-            GUILayout.Label("Position Offset X" + offsetPosition.x);
+            posOffset.x = GUILayout.HorizontalSlider(posOffset.x, -10000, 10000);
+            GUILayout.Label("Position Offset X" + posOffset.x);
 
-            offsetPosition.y = GUILayout.HorizontalSlider(offsetPosition.y, -10000, 10000);
-            GUILayout.Label("Position Offset Y" + offsetPosition.y);
+            posOffset.y = GUILayout.HorizontalSlider(posOffset.y, -10000, 10000);
+            GUILayout.Label("Position Offset Y" + posOffset.y);
 
         }
     }
+    
 }

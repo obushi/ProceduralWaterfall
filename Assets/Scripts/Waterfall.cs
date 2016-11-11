@@ -26,6 +26,12 @@ namespace ProceduralWaterfall
         public Vector4 Params;
     }
 
+    public struct DetectedObject
+    {
+        public bool IsActive;
+        public Vector3 Position;
+    }
+
     public class Waterfall : MonoBehaviour
     {
 
@@ -105,6 +111,13 @@ namespace ProceduralWaterfall
 
         #endregion
 
+        #region Detected Object
+
+        [Header("Detected Objects")]
+        public ComputeBuffer DetectedObjectsBuff;
+        const int detectionLimit = 10;
+        #endregion
+
         #region Noise
 
         [Header("Shaders for Noise")]
@@ -158,6 +171,7 @@ namespace ProceduralWaterfall
             AliveBuff2 = new ComputeBuffer(maxDropsCount, Marshal.SizeOf(typeof(Drop)), ComputeBufferType.Append);
             AliveBuff2.SetCounterValue(0);
             DropsBuff = new ComputeBuffer(maxDropsCount, Marshal.SizeOf(typeof(Drop)));
+            DetectedObjectsBuff = new ComputeBuffer(detectionLimit, Marshal.SizeOf(typeof(DetectedObject)));
             BuffArgs = new ComputeBuffer(4, sizeof(int), ComputeBufferType.IndirectArguments);
         }
 
@@ -177,6 +191,18 @@ namespace ProceduralWaterfall
             DropsBuff.SetData(drops);
             DropsMaterial = new Material(DropsRenderShader);
             DropsMaterial.hideFlags = HideFlags.HideAndDontSave;
+        }
+
+        void InitializeDetectedObjects()
+        {
+            var detectedObjects = new DetectedObject[detectionLimit];
+            for (int i = 0; i < detectionLimit; i++)
+            {
+                detectedObjects[i].IsActive = true;
+                detectedObjects[i].Position = new Vector3(Random.Range(-1, 5), Random.Range(-1, 3), 0);
+            }
+
+            DetectedObjectsBuff.SetData(detectedObjects);
         }
 
         void DrawStreamLines(StreamLine[] streams)
@@ -238,6 +264,7 @@ namespace ProceduralWaterfall
             InitializeComputeBuffers();
             InitializeStreamLines();
             InitializeDrops();
+            InitializeDetectedObjects();
             InitializeNoise();
 
             meshFilter = urg.GetComponent<MeshFilter>();
@@ -258,6 +285,9 @@ namespace ProceduralWaterfall
             Graphics.Blit(PerlinTexture, rt, PerlinMaterial, 0);
             Graphics.Blit(rt, PerlinTexture);
             rt.Release();
+
+            if (Input.GetMouseButtonDown(0))
+                InitializeDetectedObjects();
         }
 
 
@@ -281,7 +311,7 @@ namespace ProceduralWaterfall
             // Drop | 1 : Emit
             DropsCS.SetBuffer(1, "_DeadBuff1_Out", DeadBuff1);
             DropsCS.SetBuffer(1, "_AliveBuff2_In", AliveBuff2);
-            DropsCS.SetBuffer(1, "_StreamLinesBuffer", StreamLinesBuff);
+            DropsCS.SetBuffer(1, "_StreamLinesBuff", StreamLinesBuff);
             DropsCS.SetTexture(1, "_PerlinTexture", PerlinTexture);
             var emitCount = GetActiveBuffSize(DeadBuff1) > maxEmitQuantity ? streamLinesCount / numThreadX : 0;
             DropsCS.Dispatch(1, emitCount, 1, 1);
@@ -290,7 +320,8 @@ namespace ProceduralWaterfall
             DropsCS.SetBuffer(2, "_AliveBuff1_Out", AliveBuff1);
             DropsCS.SetBuffer(2, "_AliveBuff2_In", AliveBuff2);
             DropsCS.SetBuffer(2, "_DeadBuff1_In", DeadBuff1);
-            DropsCS.SetBuffer(2, "_StreamLinesBuffer", StreamLinesBuff);
+            DropsCS.SetBuffer(2, "_StreamLinesBuff", StreamLinesBuff);
+            DropsCS.SetBuffer(2, "_DetectedObjBuff", DetectedObjectsBuff);
             DropsCS.Dispatch(2, GetActiveBuffSize(AliveBuff1) / numThreadX, 1, 1);
 
             // vert / geom / frag shader
@@ -319,6 +350,7 @@ namespace ProceduralWaterfall
             if (DeadBuff2 != null) DeadBuff2.Release();
             if (AliveBuff1 != null) AliveBuff1.Release();
             if (AliveBuff2 != null) AliveBuff2.Release();
+            if (DetectedObjectsBuff != null) DetectedObjectsBuff.Release();
             if (BuffArgs != null) BuffArgs.Release();
 
             if (StreamLinesMaterial != null) DestroyImmediate(StreamLinesMaterial);
