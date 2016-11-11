@@ -26,7 +26,8 @@ namespace ProceduralWaterfall
         public Vector4 Params;
     }
 
-    public class Waterfall : MonoBehaviour {
+    public class Waterfall : MonoBehaviour
+    {
 
         #region Global parameters
 
@@ -38,7 +39,7 @@ namespace ProceduralWaterfall
         public Texture2D DropTexture;
         public bool showStreamLines = true;
         public Camera BillboardCam;
-        
+
 
         #endregion
 
@@ -47,7 +48,7 @@ namespace ProceduralWaterfall
         public Vector3 EmitterSize = new Vector3(0, 20, 0);
         public Vector3 EliminatorSize = new Vector3(0, 0, -3);
 
-        const int maxDropsCount = 2000000;
+        const int maxDropsCount = 2097152;
         const int streamLinesCount = 128;
         const int maxEmitQuantity = 128 * streamLinesCount;
         const int numThreadX = 128;
@@ -259,8 +260,13 @@ namespace ProceduralWaterfall
             rt.Release();
         }
 
+
         void OnRenderObject()
         {
+            Vector3 mousePos = BillboardCam.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, -BillboardCam.transform.position.z));
+            DropsCS.SetVector("_MousePosition", new Vector4(mousePos.x, mousePos.y, mousePos.z, 1));
+            Debug.DrawLine(Vector3.zero, mousePos, Color.white);
+
             //Drops
             DropsCS.SetInt("_StreamsCount", streamLinesCount);
             DropsCS.SetFloat("_DeltaTime", Time.deltaTime);
@@ -294,7 +300,6 @@ namespace ProceduralWaterfall
             DropsMaterial.SetTexture("_DropTexture", DropTexture);
             DropsMaterial.SetFloat("_DropSize", dropSize);
             DropsMaterial.SetBuffer("_DropsBuff", AliveBuff2);
-            //Debug.Log(GetActiveBuffSize(AliveBuff2));
             Graphics.DrawProceduralIndirect(MeshTopology.Points, GetActiveBuff(AliveBuff2));
 
             // Drop | 3 : Move
@@ -309,15 +314,15 @@ namespace ProceduralWaterfall
         void OnDisable()
         {
             if (StreamLinesBuff != null) StreamLinesBuff.Release();
-            if (DropsBuff != null)  DropsBuff.Release();
-            if (DeadBuff1 != null)  DeadBuff1.Release();
-            if (DeadBuff2 != null)  DeadBuff2.Release();
+            if (DropsBuff != null) DropsBuff.Release();
+            if (DeadBuff1 != null) DeadBuff1.Release();
+            if (DeadBuff2 != null) DeadBuff2.Release();
             if (AliveBuff1 != null) AliveBuff1.Release();
             if (AliveBuff2 != null) AliveBuff2.Release();
-            if (BuffArgs != null)   BuffArgs.Release();
+            if (BuffArgs != null) BuffArgs.Release();
 
-            if (StreamLinesMaterial != null)    DestroyImmediate(StreamLinesMaterial);
-            if (DropsMaterial != null)          DestroyImmediate(DropsMaterial);
+            if (StreamLinesMaterial != null) DestroyImmediate(StreamLinesMaterial);
+            if (DropsMaterial != null) DestroyImmediate(DropsMaterial);
         }
     }
 }

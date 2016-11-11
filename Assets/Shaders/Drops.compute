@@ -18,6 +18,7 @@ cbuffer CB
 	float _DeltaTime;
 	float _Jet;
 	float _RandSeed;
+	float4 _MousePosition;
 
 	float4 _DropParams;
 	float _DropSize;
@@ -86,7 +87,7 @@ void Emit(uint3 DTid : SV_DispatchThreadID)
 
 	// Position
 	float4 perlin = _PerlinTexture[uint2(DTid.x, _StreamsCount * 0.5)];
-	float emitDropAmount = pow(2, perlin.x * 7);
+	float emitDropAmount = pow(2, perlin.x * 6);
 	float emitSplashAmount = pow(2, perlin.x * 6);
 	float3 p = _StreamLinesBuffer[DTid.x].birthPosition;
 	int nextStreamId = clamp(DTid.x + 1, 0, _StreamsCount - 1);
@@ -98,15 +99,15 @@ void Emit(uint3 DTid : SV_DispatchThreadID)
 		Drop d = _DeadBuff1_Out.Consume();
 		d.streamId = DTid.x;
 		d.dropSize = _DropSize;
-		d.params   = _DropParams;
+		d.params = _DropParams;
 
 		d.velocity = float3(v.x + d.params.x * absV * sin(theta),
-			                v.y - d.params.y * v.y * rand(float2(DTid.x, i + 3)),
-			                v.z - d.params.x * absV * cos(theta));
+			v.y - d.params.y * v.y * rand(float2(DTid.x, i + 3)),
+			v.z - d.params.x * absV * cos(theta));
 
 		d.position = float3(p.x + posGap.x * rand(float2(DTid.x, i + 1)) + diff * d.velocity.x,
-			                p.y + 0.3 * perlin.x,
-			                p.z + posGap.z * rand(float2(DTid.x, i + 2)) + diff * d.velocity.z);
+			p.y + 0.3 * perlin.x,
+			p.z + posGap.z * rand(float2(DTid.x, i + 2)) + diff * d.velocity.z);
 
 		d.prevPosition = d.position;
 
@@ -151,7 +152,20 @@ void Update(uint3 DTid : SV_DispatchThreadID)
 
 	d.prevPosition = p;
 
+	float distanceToMouse = length(_MousePosition.xy - d.position.xy);
+
+	float3 birthPos = _StreamLinesBuffer[d.streamId].birthPosition;
 	float3 deathPos = _StreamLinesBuffer[d.streamId].deathPosition;
+
+	if (distanceToMouse < _MousePosition.w)
+	{
+		if (rand(float2(DTid.x, _RandSeed)) > 0.6)
+		{
+			/*d.position = lerp(d.prevPosition, d.position, rand(float2(DTid.x, _RandSeed) - 0.2));*/
+			d.position.x += 2.0 * cnoise(float2(DTid.x, _RandSeed));
+			d.position.y += 2.0 * smoothstep(birthPos.y - deathPos.y, 0, d.position.y - deathPos.y);
+		}
+	}
 
 	if (d.position.y < deathPos.y) {
 		_DeadBuff1_In.Append(d);
