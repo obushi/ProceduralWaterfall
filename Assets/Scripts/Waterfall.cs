@@ -37,9 +37,8 @@ namespace ProceduralWaterfall
 
         #region Global parameters
 
-        public GameObject urg;
-        MeshFilter meshFilter;
-        Mesh mesh;
+        public GameObject UrgDevice;
+        private Urg urg;
 
         public Vector3 AreaSize = new Vector3(1.0f, 15.0f, 1.0f);
         public Texture2D DropTexture;
@@ -115,6 +114,7 @@ namespace ProceduralWaterfall
 
         [Header("Detected Objects")]
         public ComputeBuffer DetectedObjectsBuff;
+        private DetectedObject[] detectedObjects;
         const int detectionLimit = 10;
         #endregion
 
@@ -195,13 +195,28 @@ namespace ProceduralWaterfall
 
         void InitializeDetectedObjects()
         {
-            var detectedObjects = new DetectedObject[detectionLimit];
+            detectedObjects = new DetectedObject[detectionLimit];
             for (int i = 0; i < detectionLimit; i++)
             {
-                detectedObjects[i].IsActive = true;
-                detectedObjects[i].Position = new Vector3(Random.Range(-1, 5), Random.Range(-1, 3), 0);
+                detectedObjects[i].IsActive = false;
+                detectedObjects[i].Position = Vector3.zero;
             }
 
+            DetectedObjectsBuff.SetData(detectedObjects);
+        }
+
+        void UpdateDetectedObjects()
+        {
+            var objectsFromUrg = urg.DetectedObjects;
+            for (int i = 0; i < objectsFromUrg.Length; i++)
+            {
+                detectedObjects[i].IsActive = objectsFromUrg[i] != Vector3.zero;
+                detectedObjects[i].Position = objectsFromUrg[i];
+            }
+            for (int i = detectionLimit - 1; i > objectsFromUrg.Length; i--)
+            {
+                detectedObjects[i].IsActive = false;
+            }
             DetectedObjectsBuff.SetData(detectedObjects);
         }
 
@@ -261,13 +276,14 @@ namespace ProceduralWaterfall
 
         void Start()
         {
+            urg = UrgDevice.GetComponent<Urg>();
+
             InitializeComputeBuffers();
             InitializeStreamLines();
             InitializeDrops();
             InitializeDetectedObjects();
             InitializeNoise();
-
-            meshFilter = urg.GetComponent<MeshFilter>();
+            
 
             // Drop | 0 : Init
             int numThreadGroupDrops = maxDropsCount / numThreadX;
@@ -278,16 +294,13 @@ namespace ProceduralWaterfall
 
         void Update()
         {
-            if (meshFilter.sharedMesh != null)
-                mesh = meshFilter.mesh;
 
             RenderTexture rt = RenderTexture.GetTemporary(PerlinTexture.width, PerlinTexture.height, 0);
             Graphics.Blit(PerlinTexture, rt, PerlinMaterial, 0);
             Graphics.Blit(rt, PerlinTexture);
             rt.Release();
 
-            if (Input.GetMouseButtonDown(0))
-                InitializeDetectedObjects();
+            UpdateDetectedObjects();
         }
 
 

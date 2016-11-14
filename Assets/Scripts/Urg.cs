@@ -317,85 +317,85 @@ using System.Linq;
 //        }
 //    }
 
-//    void ClusterDistances()
+//void ClusterDistances()
+//{
+//    bool startCluster = false;
+//    bool endCluster = false;
+//    List<int> indices = new List<int>();
+//    List<Vector3> vectorList = new List<Vector3>();
+//    int detectedCount = 0;
+//    detectedClusters.Clear();
+//    distances[0] = 0;
+//    blankCount++;
+
+//    for (int i = 1; i < distances.Length; i++)
 //    {
-//        bool startCluster = false;
-//        bool endCluster = false;
-//        List<int> indices = new List<int>();
-//        List<Vector3> vectorList = new List<Vector3>();
-//        int detectedCount = 0;
-//        detectedClusters.Clear();
-//        distances[0] = 0;
-//        blankCount++;
+//        Random.InitState(i * (int)Time.realtimeSinceStartup);
 
-//        for (int i = 1; i < distances.Length; i++)
+//        Vector3 delta = Index2Position(i, distances) - Index2Position(i - 1, distances);
+//        if (endCluster)
 //        {
-//            Random.InitState(i * (int)Time.realtimeSinceStartup);
-
-//            Vector3 delta = Index2Position(i, distances) - Index2Position(i - 1, distances);
-//            if (endCluster)
+//            if (indices.Count > 0 && detectedCount > streakThreshold)
 //            {
-//                if (indices.Count > 0 && detectedCount > streakThreshold)
-//                {
-//                    int clusterId;
+//                int clusterId;
 
-//                    //List<DetectedCluster> samePositionObj = prevClusters.Where(prevc => prevc.indices.Average() - indices.Average() < 100).ToList();
-//                    List<DetectedCluster> samePositionObj = new List<DetectedCluster>();
+//                //List<DetectedCluster> samePositionObj = prevClusters.Where(prevc => prevc.indices.Average() - indices.Average() < 100).ToList();
+//                List<DetectedCluster> samePositionObj = new List<DetectedCluster>();
 
-//                    prevClusters.Where(prevc => Vector3.Distance(prevc.vectorList.Average(), vectorList.Average()) < detectObjThreshold).ToList();
-//                    //List<DetectedCluster> samePositionObj = prevClusters.Where(prevc => prevc.indices.Intersect(indices).Count() > 0).ToList();
-//                    if (samePositionObj.Count() > 0)
-//                        clusterId = samePositionObj.First().objectId;
-//                    else
-//                        clusterId = Random.Range(0, 1000);
+//                prevClusters.Where(prevc => Vector3.Distance(prevc.vectorList.Average(), vectorList.Average()) < detectObjThreshold).ToList();
+//                //List<DetectedCluster> samePositionObj = prevClusters.Where(prevc => prevc.indices.Intersect(indices).Count() > 0).ToList();
+//                if (samePositionObj.Count() > 0)
+//                    clusterId = samePositionObj.First().objectId;
+//                else
+//                    clusterId = Random.Range(0, 1000);
 
-//                    detectedClusters.Add(new DetectedCluster(indices, vectorList, clusterId));
-//                    indices.Clear();
-//                    vectorList.Clear();
-//                    startCluster = false;
-//                }
-//                endCluster = false;
-//                detectedCount = 0;
+//                detectedClusters.Add(new DetectedCluster(indices, vectorList, clusterId));
+//                indices.Clear();
+//                vectorList.Clear();
+//                startCluster = false;
 //            }
-//            else
+//            endCluster = false;
+//            detectedCount = 0;
+//        }
+//        else
+//        {
+//            if (delta.magnitude > gapThreshold)
 //            {
-//                if (delta.magnitude > gapThreshold)
+//                if (startCluster)
 //                {
-//                    if (startCluster)
-//                    {
-//                        endCluster = true;
-//                    }
-//                    else
-//                    {
-//                        indices.Add(i);
-//                        vectorList.Add(Index2Position(i, distances));
-//                        detectedCount++;
-//                        startCluster = true;
-//                    }
-//                }
-//                else if (delta.magnitude != 0)
-//                {
-//                    if (startCluster)
-//                    {
-//                        indices.Add(i);
-//                        vectorList.Add(Index2Position(i, distances));
-//                        detectedCount++;
-//                    }
+//                    endCluster = true;
 //                }
 //                else
 //                {
-//                    if (startCluster)
-//                        endCluster = true;
+//                    indices.Add(i);
+//                    vectorList.Add(Index2Position(i, distances));
+//                    detectedCount++;
+//                    startCluster = true;
 //                }
 //            }
+//            else if (delta.magnitude != 0)
+//            {
+//                if (startCluster)
+//                {
+//                    indices.Add(i);
+//                    vectorList.Add(Index2Position(i, distances));
+//                    detectedCount++;
+//                }
+//            }
+//            else
+//            {
+//                if (startCluster)
+//                    endCluster = true;
+//            }
 //        }
-//        if (blankCount == 4)
-//        {
-//            prevClusters.Clear();
-//            blankCount = 0;
-//        }
-//        prevClusters.AddRange(detectedClusters);
 //    }
+//    if (blankCount == 4)
+//    {
+//        prevClusters.Clear();
+//        blankCount = 0;
+//    }
+//    prevClusters.AddRange(detectedClusters);
+//}
 
 //    void OnGUI()
 //    {
@@ -461,28 +461,66 @@ public class Urg : MonoBehaviour
     float scale = 0.001f; // mm -> m
 
     [SerializeField]
-    Vector2 posOffset = new Vector2(0, 12.4f);
+    Vector3 posOffset = new Vector3(0, 12.4f);
 
     [SerializeField]
-    bool debugDraw = false;
+    bool debugDraw = true;
 
     [SerializeField]
     bool drawGui = true;
     #endregion
-    
+
+    #region Mesh
+    class UrgMesh
+    {
+        public List<Vector3> vertices;
+        public List<Vector2> uv;
+        public List<int> indices;
+
+        public UrgMesh()
+        {
+            vertices = new List<Vector3>();
+            uv = new List<Vector2>();
+            indices = new List<int>();
+        }
+
+        public void Clear()
+        {
+            vertices.Clear();
+            uv.Clear();
+            indices.Clear();
+        }
+    }
+
+    private UrgMesh urgMesh;
     public MeshFilter meshFilter;
     public Mesh mesh;
-    List<long> rawDistances;
+
+    #endregion
+
+    struct DetectedObject
+    {
+        public int objectSize;
+        public Vector3 position;
+    }
+
+    long[] rawDistances;
+    public Vector3[] DetectedObjects;
+    List<DetectedObject> tempObjects;
 
     // Use this for initialization
     void Start()
     {
-        rawDistances = new List<long>();
+        rawDistances = new long[endId - beginId + 1];
         meshFilter = GetComponent<MeshFilter>();
         mesh = new Mesh();
 
         urg = gameObject.AddComponent<UrgDeviceEthernet>();
         urg.StartTCP(ipAddress, portNumber);
+        urgMesh = new UrgMesh();
+
+        DetectedObjects = new Vector3[10];
+        tempObjects = new List<DetectedObject>();
     }
 
     // Update is called once per frame
@@ -496,21 +534,101 @@ public class Urg : MonoBehaviour
         //{
         //    rawDistances = urg.distances.ToArray();
         //}
-        rawDistances = urg.distances;
+        rawDistances = urg.distances.ToArray();
+
+
+
+        PreProcess();
+        DetectObjects();
 
         if (debugDraw)
         {
             UpdateMeshFilter();
         }
+
+        for (int i = 0; i < DetectedObjects.Count(); i++)
+            Debug.DrawLine(scale * posOffset, scale * (DetectedObjects[i] + posOffset), Color.green);
+    }
+
+    private void PreProcess()
+    {
+        for (int i = 0; i < rawDistances.Count(); i++)
+        {
+            Vector3 position = Index2Position(i);
+            if (IsOffScreen(scale * (position + posOffset)) || !IsValidValue(rawDistances[i]))
+            {
+                rawDistances[i] = 0;
+            }
+        }
+    }
+
+    private bool IsValidValue(long value)
+    {
+        return value >= 21 && value <= 30000;
+    }
+
+    private void DetectObjects()
+    {
+        tempObjects.Clear();
+        bool hasBegunObj = false;
+        bool willEndObj = false;
+        int seriesCount = 0;
+
+        for (int i = 2; i < rawDistances.Count(); i++)
+        {
+            if (willEndObj)
+            {
+                if (seriesCount > streakThreshold)
+                {
+                    DetectedObject obj;
+                    obj.objectSize = seriesCount;
+                    obj.position = Index2Position((i - seriesCount) / 2);
+                    tempObjects.Add(obj);
+                }
+                hasBegunObj = false;
+                willEndObj = false;
+                seriesCount = 0;
+            }
+            else
+            {
+                var delta = rawDistances[i] - 0.5 * (rawDistances[i - 1] + rawDistances[i - 2]);
+                if (delta > gapThreshold)
+                {
+                    if(hasBegunObj)
+                    {
+                        willEndObj = true;
+                    }
+                    else
+                    {
+                        seriesCount ++;
+                        hasBegunObj = true;
+                    }
+                }
+                else if(delta == 0)
+                {
+                    if (hasBegunObj)
+                        willEndObj = true;
+                }
+                else
+                {
+                    if(hasBegunObj)
+                    {
+                        seriesCount ++;
+                    }
+                }
+            }
+        }
+
+        DetectedObjects = tempObjects.OrderByDescending(o => o.objectSize)
+                                     .Select(o => scale * (o.position + posOffset))
+                                     .Take(10)
+                                     .ToArray();
     }
 
     private bool IsOffScreen(Vector3 worldPosition)
     {
         Vector3 viewPos = Camera.main.WorldToViewportPoint(worldPosition);
-        if (viewPos.x < 0 || viewPos.x > 1 || viewPos.y < 0 || viewPos.y > 1)
-            return true;
-        else
-            return false;
+        return (viewPos.x < 0 || viewPos.x > 1 || viewPos.y < 0 || viewPos.y > 1);
     }
 
     static float Index2Rad(int index)
@@ -520,37 +638,36 @@ public class Urg : MonoBehaviour
         return step * index + offset;
     }
 
-    Vector3 Index2Position(int index, long[] distances)
+    Vector3 Index2Position(int index)
     {
         Assert.IsTrue(index >= 0 && index <= 1081);
-        return new Vector3(distances[index] * Mathf.Cos(Index2Rad(index)),
-                           distances[index] * Mathf.Sin(Index2Rad(index)));
+        return new Vector3(rawDistances[index] * Mathf.Cos(Index2Rad(index + beginId)),
+                           rawDistances[index] * Mathf.Sin(Index2Rad(index + beginId)));
     }
 
     void UpdateMeshFilter()
     {
         var distances = rawDistances.ToArray();
-        List<Vector3> vertList = new List<Vector3>();
-        List<Vector2> uvList = new List<Vector2>();
-        List<int> indexList = new List<int>();
-        vertList.Add(scale * posOffset);
-        uvList.Add(Camera.main.WorldToViewportPoint(scale * posOffset));
+        urgMesh.Clear();
+        urgMesh.vertices.Add(scale * posOffset);
+        urgMesh.uv.Add(Camera.main.WorldToViewportPoint(scale * posOffset));
+
 
         for (int i = distances.Length - 1; i >= 0; i--)
         {
-            vertList.Add(scale * (Index2Position(i, distances) + (Vector3)posOffset));
-            uvList.Add(Camera.main.WorldToViewportPoint(scale * (Index2Position(i, distances) + (Vector3)posOffset)));
+            urgMesh.vertices.Add(scale * (Index2Position(i) + posOffset));
+            urgMesh.uv.Add(Camera.main.WorldToViewportPoint(scale * (Index2Position(i) + posOffset)));
         }
 
         for (int i = 0; i < distances.Length - 1; i++)
         {
-            indexList.AddRange(new int[] { 0, i + 1, i + 2 });
+            urgMesh.indices.AddRange(new int[] { 0, i + 1, i + 2 });
         }
         
         mesh.name = "URG Data";
-        mesh.vertices = vertList.ToArray();
-        mesh.uv = uvList.ToArray();
-        mesh.triangles = indexList.ToArray();
+        mesh.vertices = urgMesh.vertices.ToArray();
+        mesh.uv = urgMesh.uv.ToArray();
+        mesh.triangles = urgMesh.indices.ToArray();
         meshFilter.sharedMesh = mesh;
     }
 
@@ -560,7 +677,7 @@ public class Urg : MonoBehaviour
         {
             if (GUILayout.Button("MD: (計測＆送信要求)"))
             {
-                urg.Write(SCIP_library.SCIP_Writer.MD(360, 720, 1, 0, 0));
+                urg.Write(SCIP_library.SCIP_Writer.MD(beginId, endId, 1, 0, 0));
             }
             if (GUILayout.Button("QUIT"))
             {
