@@ -1,7 +1,6 @@
-﻿#pragma kernel Init
+﻿#pragma kernel Initialize
 #pragma kernel Emit
 #pragma kernel Update
-#pragma kernel Move
 
 #include "UnityCG.cginc"
 #include "ClassicNoise2D.cginc"
@@ -29,6 +28,7 @@ cbuffer CB
 struct Drop
 {
 	uint streamId;
+	bool isAlive;
 	float dropSize;
 	float3 position;
 	float3 prevPosition;
@@ -38,7 +38,6 @@ struct Drop
 
 struct StreamLine
 {
-	int id;
 	float3 birthPosition;
 	float3 deathPosition;
 	float3 position;
@@ -57,54 +56,46 @@ float rand(float2 co)
 	return frac(sin(dot(co.xy, float2(12.9898, 78.233))) * 43758.5453);
 }
 
-RWStructuredBuffer<Drop> _DropsBuff;
-RWStructuredBuffer<StreamLine> _StreamLinesBuff;
+RWStructuredBuffer<StreamLine> _StreamLinesBuffer;
 StructuredBuffer<DetectedObject> _DetectedObjBuff;
 
-// Dead
-AppendStructuredBuffer<Drop> _DeadBuff1_In;
-ConsumeStructuredBuffer<Drop> _DeadBuff1_Out;
-
-// Alive 1 / 2
-AppendStructuredBuffer<Drop> _AliveBuff1_In;
-ConsumeStructuredBuffer<Drop> _AliveBuff1_Out;
-AppendStructuredBuffer<Drop> _AliveBuff2_In;
-ConsumeStructuredBuffer<Drop> _AliveBuff2_Out;
-
 Texture2D _PerlinTexture;
+RWStructuredBuffer<Drop> _DropsBuffer;
+AppendStructuredBuffer<uint> _DropsPoolBuffer_In;
+ConsumeStructuredBuffer<uint> _DropsPoolBuffer_Out;
 
-// 0 Init
-
+// #0 Initialize
 [numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
-void Init(uint3 DTid : SV_DispatchThreadID)
+void Initialize(uint3 DTid : SV_DispatchThreadID)
 {
-	_DeadBuff1_In.Append(_DropsBuff[DTid.x]);
+	_DropsPoolBuffer_In.Append(DTid.x);
 }
 
-// 1 Emit
-
+// #1 Emit
 [numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
 void Emit(uint3 DTid : SV_DispatchThreadID)
 {
-
 	// Velocity
 	float theta = cnoise(float2(DTid.x, _RandSeed)) * radians(45);
-	float3 v = _StreamLinesBuff[DTid.x].initVelocity;
+	float3 v = _StreamLinesBuffer[DTid.x].initVelocity;
 	float absV = length(v.yz);
 
 	// Position
 	float4 perlin = _PerlinTexture[uint2(DTid.x, _StreamsCount * 0.5)];
-	float emitDropAmount = pow(2, perlin.x * 6);
-	float emitSplashAmount = pow(2, perlin.x * 6);
-	float3 p = _StreamLinesBuff[DTid.x].birthPosition;
+	float emitDropAmount = pow(2, perlin.x * 7);
+	float emitSplashAmount = pow(2, perlin.x * 7);
+	float3 p = _StreamLinesBuffer[DTid.x].birthPosition;
 	int nextStreamId = clamp(DTid.x + 1, 0, _StreamsCount - 1);
-	float3 posGap = _StreamLinesBuff[nextStreamId].birthPosition - p;
+	float3 posGap = _StreamLinesBuffer[nextStreamId].birthPosition - p;
 	float diff = 2.0 * (1.0 - perlin.x) * rand(float2(_RandSeed, DTid.x));
 
 	for (int i = 0; i < emitDropAmount; i++)
 	{
-		Drop d = _DeadBuff1_Out.Consume();
+		uint id = _DropsPoolBuffer_Out.Consume();
+
+		Drop d = _DropsBuffer[id];
 		d.streamId = DTid.x;
+		d.isAlive = true;
 		d.dropSize = _DropSize;
 		d.params = _DropParams;
 
@@ -117,82 +108,83 @@ void Emit(uint3 DTid : SV_DispatchThreadID)
 			p.z + posGap.z * rand(float2(DTid.x, i + 2)) + diff * d.velocity.z);
 
 		d.prevPosition = d.position;
-
-		_AliveBuff2_In.Append(d);
+		_DropsBuffer[id] = d;
 	}
 
 	for (int j = 0; j < emitSplashAmount; j++)
 	{
-		Drop d = _DeadBuff1_Out.Consume();
+		uint id = _DropsPoolBuffer_Out.Consume();
+
+		Drop d = _DropsBuffer[id];
 		d.streamId = DTid.x;
+		d.isAlive = true;
 		d.dropSize = _SplashSize;
-		d.params   = _SplashParams;
+		d.params = _SplashParams;
 
 		d.velocity = float3(v.x + d.params.x * absV * sin(theta),
-			                v.y - d.params.y * v.y * rand(float2(DTid.x, j + 3)),
-			                v.z - d.params.x * absV * cos(theta));
+			v.y - d.params.y * v.y * rand(float2(DTid.x, j + 3)),
+			v.z - d.params.x * absV * cos(theta));
 
 		d.position = float3(p.x + posGap.x * rand(float2(DTid.x, j + 1)) + diff * d.velocity.x,
-			                p.y + 0.6 * perlin.x,
-			                p.z + posGap.z * rand(float2(DTid.x, j + 2)) + diff * d.velocity.z);
+			p.y + 0.6 * perlin.x,
+			p.z + posGap.z * rand(float2(DTid.x, j + 2)) + diff * d.velocity.z);
 
 		d.prevPosition = d.position;
-
-		_AliveBuff2_In.Append(d);
+		_DropsBuffer[id] = d;
 	}
 }
 
-// 2 Update
-
+// #2 Update
 [numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
 void Update(uint3 DTid : SV_DispatchThreadID)
 {
-	Drop d = _AliveBuff1_Out.Consume();
+	Drop d = _DropsBuffer[DTid.x];
 
-	d.velocity.y += -_Gravity * _DeltaTime * _Jet;
-
-	float3 p = d.position;
-	float3 v = d.velocity;
-	d.position = float3(p.x + v.x * d.params.w * d.params.z * (1.0 + rand(float2(DTid.x, _RandSeed * 5.0 * d.params.z))) * _DeltaTime,
-		                p.y + v.y * d.params.z * _DeltaTime,
-		                p.z + v.z * d.params.w * d.params.z * (1.0 + rand(float2(DTid.x, _RandSeed * 6.0 * d.params.w)) * _DeltaTime));
-
-	d.prevPosition = p;
-
-	float distanceToMouse = length(_MousePosition.xy - d.position.xy);
-
-	float3 birthPos = _StreamLinesBuff[d.streamId].birthPosition;
-	float3 deathPos = _StreamLinesBuff[d.streamId].deathPosition;
-
-	float upForce;
-	for (int i = 0; i < 10; i++)
+	if (d.isAlive)
 	{
-		DetectedObject obj = _DetectedObjBuff[i];
-		if (obj.isActive)
+		d.velocity.y += -_Gravity * _DeltaTime * _Jet;
+
+		float3 p = d.position;
+		float3 v = d.velocity;
+		d.position = float3(p.x + v.x * d.params.w * d.params.z * (1.0 + rand(float2(DTid.x, _RandSeed * 5.0 * d.params.z))) * _DeltaTime,
+			p.y + v.y * d.params.z * _DeltaTime,
+			p.z + v.z * d.params.w * d.params.z * (1.0 + rand(float2(DTid.x, _RandSeed * 6.0 * d.params.w)) * _DeltaTime));
+
+		d.prevPosition = p;
+
+		float distanceToMouse = length(_MousePosition.xy - d.position.xy);
+		
+
+		float upForce;
+		for (int i = 0; i < 10; i++)
 		{
-			float distance = length(obj.position.xy - d.position.xy);
-			if (distance < 2)
+			DetectedObject obj = _DetectedObjBuff[i];
+			if (obj.isActive)
 			{
-				float diff = d.position.y - obj.position.y;
-				upForce += diff * d.dropSize * 10;
+				float distance = length(obj.position.xy - d.position.xy);
+				if (distance < 2)
+				{
+					float diff = d.position.y - obj.position.y;
+					upForce += diff * d.dropSize * 10;
+				}
 			}
 		}
+
+		d.position.x += upForce * cnoise(float2(DTid.x, _RandSeed));
+		d.position.y += upForce;
+
+		float3 deathPos = _StreamLinesBuffer[d.streamId].deathPosition;
+
+		if (d.position.y < deathPos.y) {
+			d.isAlive = false;
+			d.dropSize = 0;
+			_DropsPoolBuffer_In.Append(DTid.x);
+		}
+	}
+	else
+	{
+		d.dropSize = 0;
 	}
 
-	d.position.x += upForce * cnoise(float2(DTid.x, _RandSeed));
-	d.position.y += upForce;
-
-	if (d.position.y < deathPos.y) {
-		_DeadBuff1_In.Append(d);
-	} else {
-		_AliveBuff2_In.Append(d);
-	}
-}
-
-// 3 Move
-[numthreads(NUM_THREAD_X, NUM_THREAD_Y, NUM_THREAD_Z)]
-void Move(uint3 DTid : SV_DispatchThreadID)
-{
-	Drop d = _AliveBuff2_Out.Consume();
-	_AliveBuff1_In.Append(d);
+	_DropsBuffer[DTid.x] = d;
 }

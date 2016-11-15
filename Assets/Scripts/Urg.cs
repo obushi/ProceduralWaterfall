@@ -444,16 +444,10 @@ public class Urg : MonoBehaviour
 
     #region Thresholds
     [SerializeField]
-    float distanceThreshold = 300.0f;//mm
-
-    [SerializeField]
     float gapThreshold = 40;
 
     [SerializeField]
     float streakThreshold = 10;
-
-    [SerializeField]
-    float detectObjThreshold = 10;
     #endregion
 
     #region Debug
