@@ -11,7 +11,7 @@
 	struct Drop
 	{
 		uint streamId;
-		bool isAlive;
+		float age;
 		float dropSize;
 		float3 position;
 		float3 prevPosition;

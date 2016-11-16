@@ -17,7 +17,7 @@ cbuffer CB
 	float _DeltaTime;
 	float _Jet;
 	float _RandSeed;
-	float4 _MousePosition;
+	float _DropLife;
 
 	float4 _DropParams;
 	float _DropSize;
@@ -28,7 +28,7 @@ cbuffer CB
 struct Drop
 {
 	uint streamId;
-	bool isAlive;
+	float age;
 	float dropSize;
 	float3 position;
 	float3 prevPosition;
@@ -95,7 +95,7 @@ void Emit(uint3 DTid : SV_DispatchThreadID)
 
 		Drop d = _DropsBuffer[id];
 		d.streamId = DTid.x;
-		d.isAlive = true;
+		d.age = 0;
 		d.dropSize = _DropSize;
 		d.params = _DropParams;
 
@@ -117,7 +117,7 @@ void Emit(uint3 DTid : SV_DispatchThreadID)
 
 		Drop d = _DropsBuffer[id];
 		d.streamId = DTid.x;
-		d.isAlive = true;
+		d.age = 0;
 		d.dropSize = _SplashSize;
 		d.params = _SplashParams;
 
@@ -140,7 +140,7 @@ void Update(uint3 DTid : SV_DispatchThreadID)
 {
 	Drop d = _DropsBuffer[DTid.x];
 
-	if (d.isAlive)
+	if (d.dropSize != 0 && d.age < _DropLife)
 	{
 		d.velocity.y += -_Gravity * _DeltaTime * _Jet;
 
@@ -151,9 +151,7 @@ void Update(uint3 DTid : SV_DispatchThreadID)
 			p.z + v.z * d.params.w * d.params.z * (1.0 + rand(float2(DTid.x, _RandSeed * 6.0 * d.params.w)) * _DeltaTime));
 
 		d.prevPosition = p;
-
-		float distanceToMouse = length(_MousePosition.xy - d.position.xy);
-		
+		d.age += _DeltaTime;
 
 		float upForce;
 		for (int i = 0; i < 10; i++)
@@ -162,28 +160,22 @@ void Update(uint3 DTid : SV_DispatchThreadID)
 			if (obj.isActive)
 			{
 				float distance = length(obj.position.xy - d.position.xy);
-				if (distance < 2)
+				if (distance < 2 && rand(float2(DTid.x, _RandSeed)) > 0.5)
 				{
 					float diff = d.position.y - obj.position.y;
 					upForce += diff * d.dropSize * 10;
 				}
 			}
 		}
-
 		d.position.x += upForce * cnoise(float2(DTid.x, _RandSeed));
 		d.position.y += upForce;
 
 		float3 deathPos = _StreamLinesBuffer[d.streamId].deathPosition;
 
-		if (d.position.y < deathPos.y) {
-			d.isAlive = false;
+		if (d.position.y < deathPos.y || d.age > _DropLife) {
 			d.dropSize = 0;
 			_DropsPoolBuffer_In.Append(DTid.x);
 		}
-	}
-	else
-	{
-		d.dropSize = 0;
 	}
 
 	_DropsBuffer[DTid.x] = d;

@@ -19,8 +19,8 @@ namespace ProceduralWaterfall
     public struct Drop
     {
         public uint StreamId;
-        public bool IsAlive;
         public float DropSize;
+        public float Age;
         public Vector3 Position;
         public Vector3 PrevPosition;
         public Vector3 Velocity;
@@ -181,7 +181,7 @@ namespace ProceduralWaterfall
             for (int i = 0; i < maxDropsCount; i++)
             {
                 drops[i].StreamId = 0;
-                drops[i].IsAlive = false;
+                drops[i].Age = 0;
                 drops[i].DropSize = 0.1f;
                 drops[i].Position = Vector3.zero;
                 drops[i].PrevPosition = Vector3.zero;
@@ -315,6 +315,7 @@ namespace ProceduralWaterfall
             DropsCS.SetFloat("_Gravity", g);
             DropsCS.SetFloat("_Jet", Jet);
             DropsCS.SetFloat("_RandSeed", Random.Range(0, 1.0f));
+            DropsCS.SetFloat("_DropLife", 5.0f);
             DropsCS.SetVector("_DropParams", dropParams);
             DropsCS.SetFloat("_DropSize", dropSize);
             DropsCS.SetVector("_SplashParams", splashParams);
