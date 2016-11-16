@@ -20,10 +20,10 @@ public class Urg : MonoBehaviour
     const int portNumber = 10940;
 
     [SerializeField]
-    const int beginId = 360;
+    const int beginId = 460;
 
     [SerializeField]
-    const int endId = 720;
+    const int endId = 620;
     #endregion
 
     #region Thresholds
@@ -38,11 +38,7 @@ public class Urg : MonoBehaviour
     [SerializeField]
     float scale = 0.001f; // mm -> m
 
-    [SerializeField]
-    Vector3 posOffset = new Vector3(0, 12.4f);
-
-    [SerializeField]
-    bool debugDraw = true;
+    public Vector3 posOffset = new Vector3(0, 12.4f);
 
     [SerializeField]
     bool drawGui = true;
@@ -74,23 +70,28 @@ public class Urg : MonoBehaviour
     MeshFilter meshFilter;
     MeshRenderer meshRenderer;
     public Mesh mesh;
-
     #endregion
 
-    struct DetectedObject
+    [System.Serializable]
+    public struct DetectedObject
     {
-        public int objectSize;
+        public float objectSize;
         public Vector3 position;
     }
 
-    long[] rawDistances;
-    public Vector3[] DetectedObjects;
-    List<DetectedObject> tempObjects;
+    [SerializeField]
+    long[] distances;
+    long[] prevDistances;
+
+    public DetectedObject[] DetectedObjects;
+    List<DetectedObject> tempDetectedObjects;
 
     // Use this for initialization
     void Start()
     {
-        rawDistances = new long[endId - beginId + 1];
+        distances = new long[endId - beginId + 1];
+        prevDistances = new long[endId - beginId + 1];
+
         meshFilter = GetComponent<MeshFilter>();
         meshRenderer = GetComponent<MeshRenderer>();
         mesh = new Mesh();
@@ -99,18 +100,20 @@ public class Urg : MonoBehaviour
         urg.StartTCP(ipAddress, portNumber);
         urgMesh = new UrgMesh();
 
-        DetectedObjects = new Vector3[10];
-        tempObjects = new List<DetectedObject>();
+        DetectedObjects = new DetectedObject[10];
+        tempDetectedObjects = new List<DetectedObject>();
     }
 
     // Update is called once per frame
     void Update()
     {
-
         if (Input.GetKeyDown(KeyCode.G))
             drawGui = !drawGui;
+
+        if (distances.Length != 0)
+            prevDistances = distances;
+        distances = urg.distances.ToArray();
         
-        rawDistances = urg.distances.ToArray();
         PreProcess();
         DetectObjects();
 
@@ -125,17 +128,17 @@ public class Urg : MonoBehaviour
         }
 
         for (int i = 0; i < DetectedObjects.Count(); i++)
-            Debug.DrawLine(posOffset, DetectedObjects[i], Color.green);
+            Debug.DrawLine(posOffset, DetectedObjects[i].position, Color.green);
     }
 
     private void PreProcess()
     {
-        for (int i = 0; i < rawDistances.Count(); i++)
+        for (int i = 0; i < distances.Count(); i++)
         {
             Vector3 position = Index2Position(i);
-            if (IsOffScreen(scale * position + posOffset) || !IsValidValue(rawDistances[i]))
+            if (IsOffScreen(scale * position + posOffset) || !IsValidValue(distances[i]))
             {
-                rawDistances[i] = 0;
+                distances[i] = 0;
             }
         }
     }
@@ -147,21 +150,21 @@ public class Urg : MonoBehaviour
 
     private void DetectObjects()
     {
-        tempObjects.Clear();
+        tempDetectedObjects.Clear();
         bool hasBegunObj = false;
         bool willEndObj = false;
         int seriesCount = 0;
 
-        for (int i = 2; i < rawDistances.Count(); i++)
+        for (int i = 2; i < distances.Count(); i++)
         {
             if (willEndObj)
             {
                 if (seriesCount > streakThreshold)
                 {
                     DetectedObject obj;
-                    obj.objectSize = seriesCount;
-                    obj.position = Index2Position((i - seriesCount) / 2);
-                    tempObjects.Add(obj);
+                    obj.objectSize = seriesCount * 2 * Mathf.PI / 1440 / 2;
+                    obj.position = scale * Index2Position((i - seriesCount + i) / 2) + posOffset;
+                    tempDetectedObjects.Add(obj);
                 }
                 hasBegunObj = false;
                 willEndObj = false;
@@ -169,7 +172,7 @@ public class Urg : MonoBehaviour
             }
             else
             {
-                var delta = rawDistances[i] - 0.5 * (rawDistances[i - 1] + rawDistances[i - 2]);
+                var delta = (distances[i] + prevDistances[i]) - 0.5 * (distances[i - 1] + prevDistances[i - 1] + distances[i - 2] + prevDistances[i - 2]);
                 if (delta > gapThreshold)
                 {
                     if(hasBegunObj)
@@ -197,8 +200,7 @@ public class Urg : MonoBehaviour
             }
         }
 
-        DetectedObjects = tempObjects.OrderByDescending(o => o.objectSize)
-                                     .Select(o => scale * o.position + posOffset)
+        DetectedObjects = tempDetectedObjects.OrderByDescending(o => o.objectSize)
                                      .Take(10)
                                      .ToArray();
     }
@@ -218,13 +220,13 @@ public class Urg : MonoBehaviour
 
     Vector3 Index2Position(int index)
     {
-        return new Vector3(rawDistances[index] * Mathf.Cos(Index2Rad(index + beginId)),
-                           rawDistances[index] * Mathf.Sin(Index2Rad(index + beginId)));
+        return new Vector3(distances[index] * Mathf.Cos(Index2Rad(index + beginId)),
+                           distances[index] * Mathf.Sin(Index2Rad(index + beginId)));
     }
 
     void UpdateMeshFilter()
     {
-        var distances = rawDistances.ToArray();
+        var distances = this.distances.ToArray();
         urgMesh.Clear();
         urgMesh.vertices.Add(posOffset);
         urgMesh.uv.Add(Camera.main.WorldToViewportPoint(posOffset));
@@ -261,7 +263,7 @@ public class Urg : MonoBehaviour
                 urg.Write(SCIP_library.SCIP_Writer.QT());
             }
 
-            scale = GUILayout.HorizontalSlider(scale, 0, 1f);
+            scale = GUILayout.HorizontalSlider(scale, 0, 0.15f);
             GUILayout.Label("Scale" + scale);
 
             posOffset.x = GUILayout.HorizontalSlider(posOffset.x, -20, 20);

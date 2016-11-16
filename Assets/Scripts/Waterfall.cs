@@ -6,7 +6,7 @@ using UnityEngine.Assertions;
 
 namespace ProceduralWaterfall
 {
-    public struct StreamLine
+    public struct Stream
     {
         public Vector3 BirthPosition;
         public Vector3 DeathPosition;
@@ -29,7 +29,7 @@ namespace ProceduralWaterfall
 
     public struct DetectedObject
     {
-        public bool IsActive;
+        public float Radius;
         public Vector3 Position;
     }
 
@@ -45,7 +45,7 @@ namespace ProceduralWaterfall
         private DropCounter counterText;
         
         public Texture2D DropTexture;
-        public bool showStreamLines = true;
+        public bool showStreams = true;
         public Camera BillboardCam;
 
 
@@ -59,8 +59,8 @@ namespace ProceduralWaterfall
         //const int maxDropsCount = 4194304;
         const int maxDropsCount = 2097152;
         //const int maxDropsCount = 2048;
-        const int streamLinesCount = 128;
-        const int maxEmitQuantity = 1024 * streamLinesCount;
+        const int streamsCount = 128;
+        const int maxEmitQuantity = 1024 * streamsCount;
         const int numThreadX = 128;
         const int numThreadY = 1;
         const int numThreadZ = 1;
@@ -85,14 +85,14 @@ namespace ProceduralWaterfall
 
         #endregion
 
-        #region Stream lines
+        #region Streams
 
-        [Header("Stream Lines")]
-        public ComputeBuffer StreamLinesBuffer;
-        public Shader StreamLinesRenderShader;
-        public Material StreamLinesMaterial;
+        [Header("Stream")]
+        public ComputeBuffer StreamsBuffer;
+        public Shader StreamsRenderShader;
+        public Material StreamMaterial;
 
-        public GameObject[] Lines;
+        public GameObject[] StreamObjects;
 
         #endregion
 
@@ -133,10 +133,10 @@ namespace ProceduralWaterfall
 
         #endregion
 
-        void InitializeStreamLines()
+        void InitializeStreams()
         {
-            StreamLine[] streams = new StreamLine[streamLinesCount];
-            for (int i = 0; i < streamLinesCount; i++)
+            Stream[] streams = new Stream[streamsCount];
+            for (int i = 0; i < streamsCount; i++)
             {
                 streams[i].BirthPosition = new Vector3(EmitterSize.x + i * 0.05f,
                                                        Random.Range(EmitterSize.y - 0.1f, EmitterSize.y + 0.1f),
@@ -152,13 +152,13 @@ namespace ProceduralWaterfall
                 streams[i].InitVelocity = new Vector3(Random.Range(-1.2f, 1.2f), Random.Range(-1.0f, 1.0f), -Mathf.Sqrt((g * dz * dz) / (2 * Mathf.Abs(dy))));
                 streams[i].Velocity = streams[i].InitVelocity;
             }
-            StreamLinesBuffer.SetData(streams);
-            StreamLinesMaterial = new Material(StreamLinesRenderShader);
-            StreamLinesMaterial.hideFlags = HideFlags.HideAndDontSave;
+            StreamsBuffer.SetData(streams);
+            StreamMaterial = new Material(StreamsRenderShader);
+            StreamMaterial.hideFlags = HideFlags.HideAndDontSave;
 
-            if (showStreamLines)
+            if (showStreams)
             {
-                DrawStreamLines(streams);
+                DrawStreams(streams);
             }
 
             streams = null;
@@ -166,7 +166,7 @@ namespace ProceduralWaterfall
 
         void InitializeComputeBuffers()
         {
-            StreamLinesBuffer = new ComputeBuffer(streamLinesCount, Marshal.SizeOf(typeof(StreamLine)));
+            StreamsBuffer = new ComputeBuffer(streamsCount, Marshal.SizeOf(typeof(Stream)));
             DetectedObjectsBuff = new ComputeBuffer(detectionLimit, Marshal.SizeOf(typeof(DetectedObject)));
             BuffArgs = new ComputeBuffer(4, sizeof(int), ComputeBufferType.IndirectArguments);
 
@@ -199,7 +199,7 @@ namespace ProceduralWaterfall
             detectedObjects = new DetectedObject[detectionLimit];
             for (int i = 0; i < detectionLimit; i++)
             {
-                detectedObjects[i].IsActive = false;
+                detectedObjects[i].Radius = 0;
                 detectedObjects[i].Position = Vector3.zero;
             }
 
@@ -211,23 +211,24 @@ namespace ProceduralWaterfall
             var objectsFromUrg = urg.DetectedObjects;
             for (int i = 0; i < objectsFromUrg.Length; i++)
             {
-                detectedObjects[i].IsActive = objectsFromUrg[i] != Vector3.zero;
-                detectedObjects[i].Position = objectsFromUrg[i];
+                detectedObjects[i].Radius = objectsFromUrg[i].objectSize;
+                detectedObjects[i].Position = objectsFromUrg[i].position;
             }
             for (int i = detectionLimit - 1; i > objectsFromUrg.Length; i--)
             {
-                detectedObjects[i].IsActive = false;
+                detectedObjects[i].Radius = 0;
+                detectedObjects[i].Position = urg.posOffset;
             }
             DetectedObjectsBuff.SetData(detectedObjects);
         }
 
-        void DrawStreamLines(StreamLine[] streams)
+        void DrawStreams(Stream[] streams)
         {
-            Lines = new GameObject[streamLinesCount];
-            for (int i = 0; i < streamLinesCount; i++)
+            StreamObjects = new GameObject[streamsCount];
+            for (int i = 0; i < streamsCount; i++)
             {
-                Lines[i] = new GameObject("Stream Line [" + i + "]");
-                var lineRenderer = Lines[i].AddComponent<LineRenderer>();
+                StreamObjects[i] = new GameObject("Stream Line [" + i + "]");
+                var lineRenderer = StreamObjects[i].AddComponent<LineRenderer>();
                 lineRenderer.material.shader = Shader.Find("Unlit/Color");
                 lineRenderer.SetVertexCount(11);
                 lineRenderer.SetWidth(0.01f, 0.01f);
@@ -281,7 +282,7 @@ namespace ProceduralWaterfall
             counterText = DropCounter.GetComponent<DropCounter>();
 
             InitializeComputeBuffers();
-            InitializeStreamLines();
+            InitializeStreams();
             InitializeDrops();
             InitializeDetectedObjects();
             InitializeNoise();
@@ -310,7 +311,7 @@ namespace ProceduralWaterfall
         {
             // Constants
 
-            DropsCS.SetInt("_StreamsCount", streamLinesCount);
+            DropsCS.SetInt("_StreamsCount", streamsCount);
             DropsCS.SetFloat("_DeltaTime", Time.deltaTime);
             DropsCS.SetFloat("_Gravity", g);
             DropsCS.SetFloat("_Jet", Jet);
@@ -325,7 +326,7 @@ namespace ProceduralWaterfall
 
             DropsCS.SetBuffer(1, "_DropsBuffer", DropsBuffer);
             DropsCS.SetBuffer(1, "_DropsPoolBuffer_Out", DropsPoolBuffer);
-            DropsCS.SetBuffer(1, "_StreamLinesBuffer", StreamLinesBuffer);
+            DropsCS.SetBuffer(1, "_StreamLinesBuffer", StreamsBuffer);
             DropsCS.SetTexture(1, "_PerlinTexture", PerlinTexture);
             var emitAmount = GetActiveBuffSize(DropsPoolBuffer) > maxEmitQuantity ? 1 : 0;
             DropsCS.Dispatch(1, emitAmount, 1, 1);
@@ -335,7 +336,7 @@ namespace ProceduralWaterfall
 
             DropsCS.SetBuffer(2, "_DropsBuffer", DropsBuffer);
             DropsCS.SetBuffer(2, "_DropsPoolBuffer_In", DropsPoolBuffer);
-            DropsCS.SetBuffer(2, "_StreamLinesBuffer", StreamLinesBuffer);
+            DropsCS.SetBuffer(2, "_StreamLinesBuffer", StreamsBuffer);
             DropsCS.SetBuffer(2, "_DetectedObjBuff", DetectedObjectsBuff);
             DropsCS.Dispatch(2, maxDropsCount / numThreadX, 1, 1);
 
@@ -352,13 +353,13 @@ namespace ProceduralWaterfall
 
         void OnDisable()
         {
-            if (StreamLinesBuffer != null) StreamLinesBuffer.Release();
+            if (StreamsBuffer != null) StreamsBuffer.Release();
             if (DetectedObjectsBuff != null) DetectedObjectsBuff.Release();
             if (BuffArgs != null) BuffArgs.Release();
             if (DropsBuffer != null) DropsBuffer.Release();
             if (DropsPoolBuffer != null) DropsPoolBuffer.Release();
 
-            if (StreamLinesMaterial != null) DestroyImmediate(StreamLinesMaterial);
+            if (StreamMaterial != null) DestroyImmediate(StreamMaterial);
             if (DropsMaterial != null) DestroyImmediate(DropsMaterial);
         }
     }

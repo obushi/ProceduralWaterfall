@@ -47,7 +47,7 @@ struct StreamLine
 
 struct DetectedObject
 {
-	bool isActive;
+	float radius;
 	float3 position;
 };
 
@@ -157,10 +157,12 @@ void Update(uint3 DTid : SV_DispatchThreadID)
 		for (int i = 0; i < 10; i++)
 		{
 			DetectedObject obj = _DetectedObjBuff[i];
-			if (obj.isActive)
+
+			// 障害物が存在するとき
+			if (obj.radius > 0)
 			{
 				float distance = length(obj.position.xy - d.position.xy);
-				if (distance < 2 && rand(float2(DTid.x, _RandSeed)) > 0.5)
+				if (distance < 1.5 && rand(float2(DTid.x, _RandSeed)) > 0.5)
 				{
 					float diff = d.position.y - obj.position.y;
 					upForce += diff * d.dropSize * 10;
