@@ -45,19 +45,13 @@ struct StreamLine
 	float3 velocity;
 };
 
-struct DetectedObject
-{
-	float radius;
-	float3 position;
-};
-
 float rand(float2 co)
 {
 	return frac(sin(dot(co.xy, float2(12.9898, 78.233))) * 43758.5453);
 }
 
 RWStructuredBuffer<StreamLine> _StreamLinesBuffer;
-StructuredBuffer<DetectedObject> _DetectedObjBuff;
+StructuredBuffer<float4> _DetectedObjectsBuffer;
 
 Texture2D _PerlinTexture;
 RWStructuredBuffer<Drop> _DropsBuffer;
@@ -153,24 +147,24 @@ void Update(uint3 DTid : SV_DispatchThreadID)
 		d.prevPosition = p;
 		d.age += _DeltaTime;
 
-		float upForce;
-		for (int i = 0; i < 10; i++)
+		float2 upForce;
+		for (int i = 0; i < 161; i++)
 		{
-			DetectedObject obj = _DetectedObjBuff[i];
+			float4 obj = _DetectedObjectsBuffer[i];
 
 			// 障害物が存在するとき
-			if (obj.radius > 0)
+			if (obj.w != 0)
 			{
-				float distance = length(obj.position.xy - d.position.xy);
-				if (distance < 1.5 && rand(float2(DTid.x, _RandSeed)) > 0.5)
+				float distance = length(obj.xy - d.position.xy);
+				if (distance < 1 && rand(float2(DTid.x, _RandSeed)) > 0.5)
 				{
-					float diff = d.position.y - obj.position.y;
-					upForce += diff * d.dropSize * 10;
+					float2 diff = d.position.xy - obj.xy;
+					upForce += diff * d.dropSize * -d.velocity.xy * 3;
 				}
 			}
 		}
-		d.position.x += upForce * cnoise(float2(DTid.x, _RandSeed));
-		d.position.y += upForce;
+		d.velocity.x += upForce.x;
+		d.velocity.y += abs(upForce.y);
 
 		float3 deathPos = _StreamLinesBuffer[d.streamId].deathPosition;
 

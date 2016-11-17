@@ -33,7 +33,7 @@
 		float4 color : COLOR;
 	};
 
-	StructuredBuffer<Drop> _DropsBuff;
+	StructuredBuffer<Drop> _DropsBuffer;
 	sampler2D _DropTexture;
 	float4 _DropTexture_ST;
 	float4x4 _InvViewMatrix;
@@ -61,9 +61,9 @@
 	v2g vert(uint id : SV_VertexID)
 	{
 		v2g o;
-		o.position.xyz = _DropsBuff[id].position;
-		o.position.w = _DropsBuff[id].dropSize;
-		o.prevPosition = _DropsBuff[id].prevPosition;
+		o.position.xyz = _DropsBuffer[id].position;
+		o.position.w = _DropsBuffer[id].dropSize;
+		o.prevPosition = _DropsBuffer[id].prevPosition;
 		o.color = float4(0.1, 0.11, 0.11, 0.12);
 		return o;
 	}

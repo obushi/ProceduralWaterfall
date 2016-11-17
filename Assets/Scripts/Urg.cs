@@ -7,6 +7,43 @@ using System.Linq;
 // http://sourceforge.net/p/urgnetwork/wiki/top_jp/
 // https://www.hokuyo-aut.co.jp/02sensor/07scanner/download/pdf/URG_SCIP20.pdf
 
+class UrgMesh
+{
+    public List<Vector3> VertexList { get; private set; }
+    public List<Vector2> UVList { get; private set; }
+    public List<int> IndexList { get; private set; }
+
+    public UrgMesh()
+    {
+        VertexList = new List<Vector3>();
+        UVList = new List<Vector2>();
+        IndexList = new List<int>();
+    }
+
+    public void Clear()
+    {
+        VertexList.Clear();
+        UVList.Clear();
+        IndexList.Clear();
+    }
+
+    public void AddVertex(Vector3 _pos)
+    {
+        VertexList.Add(_pos);
+    }
+
+    public void AddUv(Vector2 _uv)
+    {
+        UVList.Add(_uv);
+    }
+
+    public void AddIndices(int[] _indices)
+    {
+        IndexList.AddRange(_indices);
+    }
+}
+
+
 public class Urg : MonoBehaviour
 {
     #region Device Config
@@ -26,71 +63,52 @@ public class Urg : MonoBehaviour
     const int endId = 620;
     #endregion
 
-    #region Thresholds
-    [SerializeField]
-    float gapThreshold = 40;
-
-    [SerializeField]
-    float streakThreshold = 10;
-    #endregion
-
     #region Debug
-    [SerializeField]
-    float scale = 0.001f; // mm -> m
 
-    public Vector3 posOffset = new Vector3(0, 12.4f);
+    float _scale = 0.15f;
+    public float Scale
+    {
+        get { return _scale; }
+        set
+        {
+            if (value > 0)
+                _scale = value;
+        }
+    }
 
-    [SerializeField]
-    bool drawGui = true;
+    Vector3 _posOffset = Vector3.zero;
+    public Vector3 PosOffset
+    {
+        get { return _posOffset; }
+        set { _posOffset = value;  }
+    }
+
+    bool _drawMesh = false;
+    public bool DrawMesh {
+        get { return _drawMesh; }
+        set { _drawMesh = value; }
+    }
     #endregion
 
     #region Mesh
-    class UrgMesh
-    {
-        public List<Vector3> vertices;
-        public List<Vector2> uv;
-        public List<int> indices;
-
-        public UrgMesh()
-        {
-            vertices = new List<Vector3>();
-            uv = new List<Vector2>();
-            indices = new List<int>();
-        }
-
-        public void Clear()
-        {
-            vertices.Clear();
-            uv.Clear();
-            indices.Clear();
-        }
-    }
-
     UrgMesh urgMesh;
     MeshFilter meshFilter;
     MeshRenderer meshRenderer;
-    public Mesh mesh;
+    Mesh mesh;
     #endregion
-
-    [System.Serializable]
-    public struct DetectedObject
-    {
-        public float objectSize;
-        public Vector3 position;
-    }
 
     [SerializeField]
     long[] distances;
-    long[] prevDistances;
 
-    public DetectedObject[] DetectedObjects;
-    List<DetectedObject> tempDetectedObjects;
+    public Vector4[] DetectedObstacles { get; private set; }
+
+    bool _isConnected = false;
+    public bool IsConnected { get { return _isConnected; } }
 
     // Use this for initialization
     void Start()
     {
         distances = new long[endId - beginId + 1];
-        prevDistances = new long[endId - beginId + 1];
 
         meshFilter = GetComponent<MeshFilter>();
         meshRenderer = GetComponent<MeshRenderer>();
@@ -100,112 +118,44 @@ public class Urg : MonoBehaviour
         urg.StartTCP(ipAddress, portNumber);
         urgMesh = new UrgMesh();
 
-        DetectedObjects = new DetectedObject[10];
-        tempDetectedObjects = new List<DetectedObject>();
+        DetectedObstacles = new Vector4[endId - beginId + 1];
     }
 
     // Update is called once per frame
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.G))
-            drawGui = !drawGui;
-
-        if (distances.Length != 0)
-            prevDistances = distances;
-        distances = urg.distances.ToArray();
+        if (urg.distances.Count() == distances.Length)
+            distances = urg.distances.ToArray();
         
-        PreProcess();
-        DetectObjects();
+        UpdateObstacleData();
 
-        if (drawGui)
+        meshRenderer.enabled = _drawMesh;
+        if (_drawMesh)
         {
-            meshRenderer.enabled = true;
-            UpdateMeshFilter();
+            CreateMesh();
+            ApplyMesh();
         }
-        else
-        {
-            meshRenderer.enabled = false;
-        }
-
-        for (int i = 0; i < DetectedObjects.Count(); i++)
-            Debug.DrawLine(posOffset, DetectedObjects[i].position, Color.green);
     }
 
-    private void PreProcess()
+    void UpdateObstacleData()
     {
-        for (int i = 0; i < distances.Count(); i++)
+        for (int i = 0; i < distances.Length; i++)
         {
-            Vector3 position = Index2Position(i);
-            if (IsOffScreen(scale * position + posOffset) || !IsValidValue(distances[i]))
+            Vector3 position = _scale * Index2Position(i) + PosOffset;
+            if (IsOffScreen(position) || !IsValidDistance(distances[i]))
             {
                 distances[i] = 0;
             }
+            DetectedObstacles[i] = new Vector4(position.x, position.y, position.z, distances[i]);
         }
     }
 
-    private bool IsValidValue(long value)
+    static bool IsValidDistance(long distance)
     {
-        return value >= 21 && value <= 30000;
+        return distance >= 21 && distance <= 30000;
     }
 
-    private void DetectObjects()
-    {
-        tempDetectedObjects.Clear();
-        bool hasBegunObj = false;
-        bool willEndObj = false;
-        int seriesCount = 0;
-
-        for (int i = 2; i < distances.Count(); i++)
-        {
-            if (willEndObj)
-            {
-                if (seriesCount > streakThreshold)
-                {
-                    DetectedObject obj;
-                    obj.objectSize = seriesCount * 2 * Mathf.PI / 1440 / 2;
-                    obj.position = scale * Index2Position((i - seriesCount + i) / 2) + posOffset;
-                    tempDetectedObjects.Add(obj);
-                }
-                hasBegunObj = false;
-                willEndObj = false;
-                seriesCount = 0;
-            }
-            else
-            {
-                var delta = (distances[i] + prevDistances[i]) - 0.5 * (distances[i - 1] + prevDistances[i - 1] + distances[i - 2] + prevDistances[i - 2]);
-                if (delta > gapThreshold)
-                {
-                    if(hasBegunObj)
-                    {
-                        willEndObj = true;
-                    }
-                    else
-                    {
-                        seriesCount ++;
-                        hasBegunObj = true;
-                    }
-                }
-                else if(delta == 0)
-                {
-                    if (hasBegunObj)
-                        willEndObj = true;
-                }
-                else
-                {
-                    if(hasBegunObj)
-                    {
-                        seriesCount ++;
-                    }
-                }
-            }
-        }
-
-        DetectedObjects = tempDetectedObjects.OrderByDescending(o => o.objectSize)
-                                     .Take(10)
-                                     .ToArray();
-    }
-
-    private bool IsOffScreen(Vector3 worldPosition)
+    bool IsOffScreen(Vector3 worldPosition)
     {
         Vector3 viewPos = Camera.main.WorldToViewportPoint(worldPosition);
         return (viewPos.x < 0 || viewPos.x > 1 || viewPos.y < 0 || viewPos.y > 1);
@@ -224,55 +174,43 @@ public class Urg : MonoBehaviour
                            distances[index] * Mathf.Sin(Index2Rad(index + beginId)));
     }
 
-    void UpdateMeshFilter()
+    void CreateMesh()
     {
-        var distances = this.distances.ToArray();
         urgMesh.Clear();
-        urgMesh.vertices.Add(posOffset);
-        urgMesh.uv.Add(Camera.main.WorldToViewportPoint(posOffset));
-
+        urgMesh.AddVertex(PosOffset);
+        urgMesh.AddUv(Camera.main.WorldToViewportPoint(PosOffset));
 
         for (int i = distances.Length - 1; i >= 0; i--)
         {
-            urgMesh.vertices.Add(scale * Index2Position(i) + posOffset);
-            urgMesh.uv.Add(Camera.main.WorldToViewportPoint(scale * Index2Position(i) + posOffset));
+            urgMesh.AddVertex(_scale * Index2Position(i) + PosOffset);
+            urgMesh.AddUv(Camera.main.WorldToViewportPoint(_scale * Index2Position(i) + PosOffset));
         }
 
         for (int i = 0; i < distances.Length - 1; i++)
         {
-            urgMesh.indices.AddRange(new int[] { 0, i + 1, i + 2 });
+            urgMesh.AddIndices(new int[] { 0, i + 1, i + 2 });
         }
-        
+    }
+
+    void ApplyMesh()
+    {
+        mesh.Clear();
         mesh.name = "URG Data";
-        mesh.vertices = urgMesh.vertices.ToArray();
-        mesh.uv = urgMesh.uv.ToArray();
-        mesh.triangles = urgMesh.indices.ToArray();
+        mesh.vertices = urgMesh.VertexList.ToArray();
+        mesh.uv = urgMesh.UVList.ToArray();
+        mesh.triangles = urgMesh.IndexList.ToArray();
         meshFilter.sharedMesh = mesh;
     }
 
-    void OnGUI()
+    public void Connect()
     {
-        if (drawGui)
-        {
-            if (GUILayout.Button("MD: (計測＆送信要求)"))
-            {
-                urg.Write(SCIP_library.SCIP_Writer.MD(beginId, endId, 1, 0, 0));
-            }
-            if (GUILayout.Button("QUIT"))
-            {
-                urg.Write(SCIP_library.SCIP_Writer.QT());
-            }
-
-            scale = GUILayout.HorizontalSlider(scale, 0, 0.15f);
-            GUILayout.Label("Scale" + scale);
-
-            posOffset.x = GUILayout.HorizontalSlider(posOffset.x, -20, 20);
-            GUILayout.Label("Position Offset X" + posOffset.x);
-
-            posOffset.y = GUILayout.HorizontalSlider(posOffset.y, -30, 30);
-            GUILayout.Label("Position Offset Y" + posOffset.y);
-
-        }
+        urg.Write(SCIP_library.SCIP_Writer.MD(beginId, endId, 1, 0, 0));
+        _isConnected = true;
     }
-    
+
+    public void Disconnect()
+    {
+        urg.Write(SCIP_library.SCIP_Writer.QT());
+        _isConnected = false;
+    }
 }
