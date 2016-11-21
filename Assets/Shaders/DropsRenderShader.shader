@@ -11,11 +11,11 @@
 	struct Drop
 	{
 		uint streamId;
-		float age;
+		float2 age;
 		float dropSize;
 		float3 position;
 		float3 prevPosition;
-		float3 velocity;
+		float4 velocity;
 		float4 params;
 	};
 
@@ -64,7 +64,8 @@
 		o.position.xyz = _DropsBuffer[id].position;
 		o.position.w = _DropsBuffer[id].dropSize;
 		o.prevPosition = _DropsBuffer[id].prevPosition;
-		o.color = float4(0.1, 0.11, 0.11, 0.12);
+		o.color = float4(0.18, 0.19, 0.19, 0.07);
+		//o.color = float4(0.08, 0.09, 0.09, 0.07);
 		return o;
 	}
 
@@ -109,10 +110,9 @@
 	SubShader
 	{
 		Tags{ "RenderType" = "Transparent" "IgnoreProjector" = "True" "RenderType" = "Transparent" }
-			LOD 100
-
 			Zwrite Off
-			Blend One One
+			Blend OneMinusDstColor One
+			//Blend One One
 			Cull Off
 
 		Pass

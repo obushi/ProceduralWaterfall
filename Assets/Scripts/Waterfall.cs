@@ -21,10 +21,10 @@ namespace ProceduralWaterfall
     {
         public uint StreamId;
         public float DropSize;
-        public float Age;
+        public Vector2 Age;
         public Vector3 Position;
         public Vector3 PrevPosition;
-        public Vector3 Velocity;
+        public Vector4 Velocity;
         public Vector4 Params;
     }
 
@@ -61,8 +61,8 @@ namespace ProceduralWaterfall
         [SerializeField]
         static Vector3 waterfallSize = new Vector3(5, 30, 3);
 
-        [SerializeField, Range(0.01f, 10.0f)]
-        float g = 4.0f;
+        [SerializeField, Range(0.01f, 20.0f)]
+        float g = 10;
 
         [SerializeField, Range(0.1f, 1.0f)]
         float jet = 1.0f;
@@ -70,20 +70,26 @@ namespace ProceduralWaterfall
         [Header("Drop / Splash Params")]
 
         [SerializeField]
+        Vector4 duration = new Vector4(5.0f, 6.0f, 6.0f, 8.0f);
+
+        [SerializeField]
+        Vector4 collisionParams = new Vector4(230, 5.0f, 1, 0.17f);
+
+        [SerializeField]
         Vector4 dropParams = new Vector4(1.0f, 1.0f, 1.0f, 0.015f);
 
         [SerializeField, Range(0.0005f, 0.2f)]
-        float dropSize = 0.001f;
+        float dropSize = 0.035f;
 
         [SerializeField]
         Vector4 splashParams = new Vector4(0.5f, 0.5f, 0.1f, 0.1f);
 
         [SerializeField, Range(0.0001f, 0.1f)]
-        float splashSize = 0.001f;
+        float splashSize = 0.01f;
 
         const int maxDropsCount = 2097152;
         const int streamsCount = 128;
-        const int maxEmitQuantity = 1024 * streamsCount;
+        const int maxEmitQuantity = 512 * streamsCount;
         const int numThreadX = 128;
         const int numThreadY = 1;
         const int numThreadZ = 1;
@@ -193,11 +199,11 @@ namespace ProceduralWaterfall
             for (int i = 0; i < maxDropsCount; i++)
             {
                 drops[i].StreamId = 0;
-                drops[i].Age = 0;
+                drops[i].Age = new Vector2(0, 0);
                 drops[i].DropSize = 0.1f;
                 drops[i].Position = Vector3.zero;
                 drops[i].PrevPosition = Vector3.zero;
-                drops[i].Velocity = Vector3.down;
+                drops[i].Velocity = new Vector4(0, -1, 0, 1);
                 drops[i].Params = new Vector4(1.0f, 1.0f, 1.0f, 1.0f);  // InitVhCoef, InitVvCoef, UpdatePosCoef, UpdateVelCoef
             }
 
@@ -222,7 +228,7 @@ namespace ProceduralWaterfall
 
         void InitializeNoise()
         {
-            perlinTexture = new RenderTexture(128, 128, 0, RenderTextureFormat.ARGB32);
+            perlinTexture = new RenderTexture(streamsCount, streamsCount, 0, RenderTextureFormat.ARGB32);
             perlinTexture.hideFlags = HideFlags.DontSave;
             perlinTexture.filterMode = FilterMode.Point;
             perlinTexture.wrapMode = TextureWrapMode.Repeat;
@@ -287,8 +293,6 @@ namespace ProceduralWaterfall
             if (Input.GetKeyDown(KeyCode.G))
                 showGui = !showGui;
 
-            urg.DrawMesh = showGui;
-
             DetectedObstaclesBuffer.SetData(urg.DetectedObstacles);
         }
 
@@ -301,8 +305,9 @@ namespace ProceduralWaterfall
             dropsComputeShader.SetFloat("_DeltaTime", Time.deltaTime);
             dropsComputeShader.SetFloat("_Gravity", g);
             dropsComputeShader.SetFloat("_Jet", jet);
-            dropsComputeShader.SetFloat("_RandSeed", Random.Range(0, 1.0f));
-            dropsComputeShader.SetFloat("_DropLife", 5.0f);
+            dropsComputeShader.SetFloat("_RandSeed", Random.Range(1.0f, 5.0f));
+            dropsComputeShader.SetVector("_Duration", duration);
+            dropsComputeShader.SetVector("_CollisionParams", collisionParams);
             dropsComputeShader.SetVector("_DropParams", dropParams);
             dropsComputeShader.SetFloat("_DropSize", dropSize);
             dropsComputeShader.SetVector("_SplashParams", splashParams);
@@ -349,6 +354,13 @@ namespace ProceduralWaterfall
             if (dropsMaterial != null) DestroyImmediate(dropsMaterial);
         }
 
+        void OnApplicationQuit()
+        {
+            if (urg.IsConnected)
+                urg.Disconnect();
+            urg.Release();
+        }
+
         void OnGUI()
         {
             if (showGui)
@@ -359,8 +371,13 @@ namespace ProceduralWaterfall
                 styleState.textColor = Color.white;
                 style.normal = styleState;
 
-                GUILayout.BeginArea(new Rect(0, 0, 200, Screen.height), style);
-                
+                GUILayout.BeginArea(new Rect(0, 0, 300, Screen.height), style);
+
+                var urgStatus = urg.IsConnected ? "Connected" : "Not Connected";
+                GUILayout.Label("URG Status :  " + urgStatus);
+
+                urg.DrawMesh = GUILayout.Toggle(urg.DrawMesh, "Show URG Data");
+
                 if (GUILayout.Button("Connect"))
                 {
                     urg.Connect();
@@ -380,7 +397,7 @@ namespace ProceduralWaterfall
                     UnityEngine.SceneManagement.SceneManager.LoadScene(0);
                 }
 
-                GUILayout.Space(40);
+                GUILayout.Space(30);
 
                 Vector3 pos = new Vector3();
                 GUILayout.Label("URG Offset X :  " + urg.PosOffset.x);
@@ -391,26 +408,38 @@ namespace ProceduralWaterfall
                 urg.PosOffset = pos;
 
                 GUILayout.Label("Scale :  " + urg.Scale.ToString("0.000"));
-                urg.Scale = GUILayout.HorizontalSlider(urg.Scale, 0.001f, 1.0f);
+                urg.Scale = GUILayout.HorizontalSlider(urg.Scale, 0.001f, 0.2f);
 
-                GUILayout.Space(40);
+                GUILayout.Space(30);
 
                 GUILayout.Label("Waterfall Size X :  " + waterfallSize.x);
-                waterfallSize.x = GUILayout.HorizontalSlider(waterfallSize.x, 1, 10);
+                waterfallSize.x = GUILayout.HorizontalSlider(waterfallSize.x, 1, 30);
 
                 GUILayout.Label("Waterfall Size Y :  " + waterfallSize.y);
                 waterfallSize.y = GUILayout.HorizontalSlider(waterfallSize.y, 10, 100);
 
                 GUILayout.Label("Waterfall Size Z :  " + waterfallSize.z);
-                waterfallSize.z = GUILayout.HorizontalSlider(waterfallSize.z, 1, 5);
+                waterfallSize.z = GUILayout.HorizontalSlider(waterfallSize.z, 1, 20);
 
-                GUILayout.Space(40);
+                GUILayout.Space(30);
 
                 GUILayout.Label("G :  " + g);
-                g = GUILayout.HorizontalSlider(g, 0.1f, 10);
+                g = GUILayout.HorizontalSlider(g, 0.1f, 20);
 
                 GUILayout.Label("Jet  : " + jet);
                 jet = GUILayout.HorizontalSlider(jet, 0, 1f);
+
+                GUILayout.Label("Drop Duration :  " + duration.x.ToString("0.00") + "  ~  " + duration.y.ToString("0.00"));
+                GUILayout.BeginHorizontal();
+                duration.x = GUILayout.HorizontalSlider(duration.x, 1, 20);
+                duration.y = GUILayout.HorizontalSlider(duration.y, 1, 40);
+                GUILayout.EndHorizontal();
+
+                GUILayout.Label("Splash Duration :  " + duration.z.ToString("0.00") + "  ~  " + duration.w.ToString("0.00"));
+                GUILayout.BeginHorizontal();
+                duration.z = GUILayout.HorizontalSlider(duration.z, 1, 20);
+                duration.w = GUILayout.HorizontalSlider(duration.w, 1, 40);
+                GUILayout.EndHorizontal();
 
                 GUILayout.Label("Drop Size :  " + dropSize.ToString("0.000"));
                 dropSize = GUILayout.HorizontalSlider(dropSize, 0.0005f, 0.2f);
@@ -418,9 +447,22 @@ namespace ProceduralWaterfall
                 GUILayout.Label("Splash Size :  " + splashSize.ToString("0.000"));
                 splashSize = GUILayout.HorizontalSlider(splashSize, 0.0001f, 0.1f);
 
-                GUILayout.Space(40);
+                GUILayout.Space(30);
 
-                GUILayout.Label("Drop Count :  " + (maxDropsCount - GetActiveBuffSize(dropsPoolBuffer)).ToString());
+                GUILayout.Label("Collision Range :  " + collisionParams.w);
+                collisionParams.w = GUILayout.HorizontalSlider(collisionParams.w, 0, 1.0f);
+
+                GUILayout.Label("After Collision Speed Multiplier X :  " + collisionParams.x);
+                collisionParams.x = GUILayout.HorizontalSlider(collisionParams.x, 0, 1000.0f);
+
+                GUILayout.Label("After Collision Speed Multiplier Y :  " + collisionParams.y);
+                collisionParams.y = GUILayout.HorizontalSlider(collisionParams.y, 0.0001f, 30.0f);
+
+                GUILayout.Label("After Collision Speed Multiplier Z :  " + collisionParams.z);
+                collisionParams.z = GUILayout.HorizontalSlider(collisionParams.z, 0.0001f, 3.0f);
+
+                GUILayout.Label("Drop Count :  " + (maxDropsCount - GetActiveBuffSize(dropsPoolBuffer)) + " / " + maxDropsCount);
+                GUILayout.Label("FPS : " + (1 / Time.deltaTime).ToString("0.00"));
 
                 GUILayout.EndArea();
             }

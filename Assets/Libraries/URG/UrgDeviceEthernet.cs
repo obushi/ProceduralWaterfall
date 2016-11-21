@@ -64,7 +64,7 @@ public class UrgDeviceEthernet : UrgDevice
 		DeInit();
 	}
 	
-	void DeInit()
+	public void DeInit()
 	{
 		if(tcpClient != null){
 			if( tcpClient.Connected ){

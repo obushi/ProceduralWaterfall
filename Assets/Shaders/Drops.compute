@@ -17,7 +17,8 @@ cbuffer CB
 	float _DeltaTime;
 	float _Jet;
 	float _RandSeed;
-	float _DropLife;
+	float4 _Duration;
+	float4 _CollisionParams; // CollisionRange, After PosX Multiplier, After PosY Multiplier
 
 	float4 _DropParams;
 	float _DropSize;
@@ -28,11 +29,11 @@ cbuffer CB
 struct Drop
 {
 	uint streamId;
-	float age;
+	float2 age;
 	float dropSize;
 	float3 position;
 	float3 prevPosition;
-	float3 velocity;
+	float4 velocity; // Velocity + Collision flag
 	float4 params; // InitVhCoef, InitVvCoef, UpdatePosCoef, UpdateVelCoef
 };
 
@@ -76,8 +77,8 @@ void Emit(uint3 DTid : SV_DispatchThreadID)
 
 	// Position
 	float4 perlin = _PerlinTexture[uint2(DTid.x, _StreamsCount * 0.5)];
-	float emitDropAmount = pow(2, perlin.x * 7);
-	float emitSplashAmount = pow(2, perlin.x * 7);
+	float emitDropAmount = pow(2, perlin.x * 8);
+	float emitSplashAmount = pow(2, perlin.x * 8);
 	float3 p = _StreamLinesBuffer[DTid.x].birthPosition;
 	int nextStreamId = clamp(DTid.x + 1, 0, _StreamsCount - 1);
 	float3 posGap = _StreamLinesBuffer[nextStreamId].birthPosition - p;
@@ -89,17 +90,19 @@ void Emit(uint3 DTid : SV_DispatchThreadID)
 
 		Drop d = _DropsBuffer[id];
 		d.streamId = DTid.x;
-		d.age = 0;
+		d.age.x = 0;
+		d.age.y = lerp(_Duration.x, _Duration.y, rand(float2(DTid.x, i + 1)));
 		d.dropSize = _DropSize;
 		d.params = _DropParams;
 
-		d.velocity = float3(v.x + d.params.x * absV * sin(theta),
-			v.y - d.params.y * v.y * rand(float2(DTid.x, i + 3)),
-			v.z - d.params.x * absV * cos(theta));
+		d.velocity = float4(v.x + d.params.x * absV * sin(theta),
+			v.y - d.params.y * v.y * rand(float2(DTid.x, i + 2)),
+			v.z - d.params.x * absV * cos(theta),
+			1);
 
-		d.position = float3(p.x + posGap.x * rand(float2(DTid.x, i + 1)) + diff * d.velocity.x,
+		d.position = float3(p.x + posGap.x * rand(float2(DTid.x, i + 3)) + diff * d.velocity.x,
 			p.y + 0.3 * perlin.x,
-			p.z + posGap.z * rand(float2(DTid.x, i + 2)) + diff * d.velocity.z);
+			p.z + posGap.z * rand(float2(DTid.x, i + 4)) + diff * d.velocity.z);
 
 		d.prevPosition = d.position;
 		_DropsBuffer[id] = d;
@@ -111,17 +114,19 @@ void Emit(uint3 DTid : SV_DispatchThreadID)
 
 		Drop d = _DropsBuffer[id];
 		d.streamId = DTid.x;
-		d.age = 0;
+		d.age.x = 0;
+		d.age.y = lerp(_Duration.z, _Duration.w, rand(float2(DTid.x, i + 1)));
 		d.dropSize = _SplashSize;
 		d.params = _SplashParams;
 
-		d.velocity = float3(v.x + d.params.x * absV * sin(theta),
-			v.y - d.params.y * v.y * rand(float2(DTid.x, j + 3)),
-			v.z - d.params.x * absV * cos(theta));
+		d.velocity = float4(v.x + d.params.x * absV * sin(theta),
+			v.y - d.params.y * v.y * rand(float2(DTid.x, j + 2)),
+			v.z - d.params.x * absV * cos(theta),
+			1);
 
-		d.position = float3(p.x + posGap.x * rand(float2(DTid.x, j + 1)) + diff * d.velocity.x,
+		d.position = float3(p.x + posGap.x * rand(float2(DTid.x, j + 3)) + diff * d.velocity.x,
 			p.y + 0.6 * perlin.x,
-			p.z + posGap.z * rand(float2(DTid.x, j + 2)) + diff * d.velocity.z);
+			p.z + posGap.z * rand(float2(DTid.x, j + 4)) + diff * d.velocity.z);
 
 		d.prevPosition = d.position;
 		_DropsBuffer[id] = d;
@@ -134,41 +139,73 @@ void Update(uint3 DTid : SV_DispatchThreadID)
 {
 	Drop d = _DropsBuffer[DTid.x];
 
-	if (d.dropSize != 0 && d.age < _DropLife)
+	if (d.dropSize != 0 && d.age.x < d.age.y)
 	{
-		d.velocity.y += -_Gravity * _DeltaTime * _Jet;
-
 		float3 p = d.position;
-		float3 v = d.velocity;
+		float3 v = d.velocity.xyz;
 		d.position = float3(p.x + v.x * d.params.w * d.params.z * (1.0 + rand(float2(DTid.x, _RandSeed * 5.0 * d.params.z))) * _DeltaTime,
-			p.y + v.y * d.params.z * _DeltaTime,
+			p.y + (v.y * d.params.z * _DeltaTime) * _Jet,
 			p.z + v.z * d.params.w * d.params.z * (1.0 + rand(float2(DTid.x, _RandSeed * 6.0 * d.params.w)) * _DeltaTime));
 
 		d.prevPosition = p;
-		d.age += _DeltaTime;
+		d.velocity.y += -_Gravity * _DeltaTime;
+		d.age.x += _DeltaTime;
 
-		float2 upForce;
-		for (int i = 0; i < 161; i++)
+		float random = rand(float2(DTid.x, _RandSeed));
+
+		//float2 upForce;
+		//for (int i = 0; i < 161; i++)
+		//{
+		//	float4 obj = _DetectedObjectsBuffer[i];
+
+		//	// 障害物が存在するとき
+		//	if (obj.w != 0)
+		//	{
+		//		float distance = length(obj.xy - d.position.xy);
+		//		if (distance < _CollisionParams.x)
+		//		{
+		//			float2 diff = d.position.xy - obj.xy;
+		//			upForce += diff * 0.2 * -d.velocity.xy;
+		//		}
+		//	}
+		//}
+
+		//if (random > 0.5)
+		//{
+		//	d.velocity.x += upForce.x * random * _CollisionParams.y;
+		//	d.velocity.y += upForce.y * _CollisionParams.z;
+		//}
+
+		if (d.velocity.w > 0)
 		{
-			float4 obj = _DetectedObjectsBuffer[i];
+			int minIndex = 0;
+			float minDiff = length(_DetectedObjectsBuffer[0].xy - d.position.xy);
+			float diff;
 
-			// 障害物が存在するとき
-			if (obj.w != 0)
+			for (int i = 1; i < 161; i++)
 			{
-				float distance = length(obj.xy - d.position.xy);
-				if (distance < 1 && rand(float2(DTid.x, _RandSeed)) > 0.5)
+				float4 obj = _DetectedObjectsBuffer[i];
+				diff = length(obj.xy - d.position.xy);
+				if (obj.w > 0 && diff < minDiff)
 				{
-					float2 diff = d.position.xy - obj.xy;
-					upForce += diff * d.dropSize * -d.velocity.xy * 3;
+					minDiff = diff;
+					minIndex = i;
 				}
 			}
+
+			if (minDiff < _CollisionParams.w * random)
+			{
+				float2 distance = _DetectedObjectsBuffer[minIndex].xy - d.position.xy;
+				d.velocity.x += distance.x * _CollisionParams.x;
+				d.velocity.y *= -1 * distance.y * _CollisionParams.y;
+				d.velocity.z *= _CollisionParams.z * random;
+				d.velocity.w = 1;
+			}
 		}
-		d.velocity.x += upForce.x;
-		d.velocity.y += abs(upForce.y);
 
 		float3 deathPos = _StreamLinesBuffer[d.streamId].deathPosition;
 
-		if (d.position.y < deathPos.y || d.age > _DropLife) {
+		if (d.position.y < deathPos.y || d.position.z < deathPos.z * 10 || d.age.x > d.age.y) {
 			d.dropSize = 0;
 			_DropsPoolBuffer_In.Append(DTid.x);
 		}

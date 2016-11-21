@@ -83,7 +83,7 @@ public class Urg : MonoBehaviour
         set { _posOffset = value;  }
     }
 
-    bool _drawMesh = false;
+    bool _drawMesh = true;
     public bool DrawMesh {
         get { return _drawMesh; }
         set { _drawMesh = value; }
@@ -211,6 +211,12 @@ public class Urg : MonoBehaviour
     public void Disconnect()
     {
         urg.Write(SCIP_library.SCIP_Writer.QT());
+        _isConnected = false;
+    }
+
+    public void Release()
+    {
+        urg.DeInit();
         _isConnected = false;
     }
 }
