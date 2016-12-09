@@ -73,13 +73,13 @@ namespace ProceduralWaterfall
         Vector4 duration = new Vector4(5.0f, 6.0f, 6.0f, 8.0f);
 
         [SerializeField]
-        Vector4 collisionParams = new Vector4(230, 5.0f, 1, 0.17f);
+        Vector4 collisionParams = new Vector4(50, 0.001f, 1, 0.45f);
 
         [SerializeField]
         Vector4 dropParams = new Vector4(1.0f, 1.0f, 1.0f, 0.015f);
 
         [SerializeField, Range(0.0005f, 0.2f)]
-        float dropSize = 0.035f;
+        float dropSize = 0.026f;
 
         [SerializeField]
         Vector4 splashParams = new Vector4(0.5f, 0.5f, 0.1f, 0.1f);
@@ -358,7 +358,6 @@ namespace ProceduralWaterfall
         {
             if (urg.IsConnected)
                 urg.Disconnect();
-            urg.Release();
         }
 
         void OnGUI()

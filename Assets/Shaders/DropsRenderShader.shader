@@ -23,6 +23,7 @@
 	{
 		float4 position : TEXCOORD0;
 		float3 prevPosition : TEXCOORD1;
+		float4 velocity : TEXCOORD2;
 		float4 color : COLOR;
 	};
 
@@ -64,6 +65,7 @@
 		o.position.xyz = _DropsBuffer[id].position;
 		o.position.w = _DropsBuffer[id].dropSize;
 		o.prevPosition = _DropsBuffer[id].prevPosition;
+		o.velocity = _DropsBuffer[id].velocity;
 		o.color = float4(0.18, 0.19, 0.19, 0.07);
 		//o.color = float4(0.08, 0.09, 0.09, 0.07);
 		return o;
@@ -89,7 +91,7 @@
 		for (int j = 0; j < 2; j++)
 		{
 			float3 position = g_positions_to[j] * In[0].position.w;
-			position = mul(_InvViewMatrix, position) + In[0].position.xyz;
+			position = mul(_InvViewMatrix, position) + lerp(In[0].prevPosition.xyz, In[0].position.xyz, 0.1 * length(In[0].velocity.xyz));
 			o.position = mul(UNITY_MATRIX_MVP, float4(position, 1.0));
 
 			o.color = In[0].color;

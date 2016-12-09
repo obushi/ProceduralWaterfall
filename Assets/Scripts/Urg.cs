@@ -3,6 +3,7 @@ using UnityEngine.Events;
 using UnityEngine.Assertions;
 using System.Collections.Generic;
 using System.Linq;
+using URG;
 
 // http://sourceforge.net/p/urgnetwork/wiki/top_jp/
 // https://www.hokuyo-aut.co.jp/02sensor/07scanner/download/pdf/URG_SCIP20.pdf
@@ -48,7 +49,7 @@ public class Urg : MonoBehaviour
 {
     #region Device Config
     [SerializeField]
-    UrgDeviceEthernet urg;
+    EthernetURG urg;
 
     [SerializeField]
     const string ipAddress = "192.168.0.35";
@@ -102,8 +103,7 @@ public class Urg : MonoBehaviour
 
     public Vector4[] DetectedObstacles { get; private set; }
 
-    bool _isConnected = false;
-    public bool IsConnected { get { return _isConnected; } }
+    public bool IsConnected { get { return urg.IsConnected; } }
 
     // Use this for initialization
     void Start()
@@ -114,8 +114,8 @@ public class Urg : MonoBehaviour
         meshRenderer = GetComponent<MeshRenderer>();
         mesh = new Mesh();
 
-        urg = gameObject.AddComponent<UrgDeviceEthernet>();
-        urg.StartTCP(ipAddress, portNumber);
+        urg = new EthernetURG(ipAddress, portNumber);
+        urg.Open();
         urgMesh = new UrgMesh();
 
         DetectedObstacles = new Vector4[endId - beginId + 1];
@@ -124,8 +124,8 @@ public class Urg : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        if (urg.distances.Count() == distances.Length)
-            distances = urg.distances.ToArray();
+        if (urg.Distances.Count() == distances.Length)
+            distances = urg.Distances.ToArray();
         
         UpdateObstacleData();
 
@@ -205,18 +205,10 @@ public class Urg : MonoBehaviour
     public void Connect()
     {
         urg.Write(SCIP_library.SCIP_Writer.MD(beginId, endId, 1, 0, 0));
-        _isConnected = true;
     }
 
     public void Disconnect()
     {
         urg.Write(SCIP_library.SCIP_Writer.QT());
-        _isConnected = false;
-    }
-
-    public void Release()
-    {
-        urg.DeInit();
-        _isConnected = false;
     }
 }
