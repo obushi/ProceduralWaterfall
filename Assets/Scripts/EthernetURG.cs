@@ -18,14 +18,17 @@ namespace URG
         [SerializeField]
         readonly int port;
 
+        readonly static public URGType DeviceType = URGType.Ethernet;
+
         TcpClient tcpClient;
         Thread listenThread = null;
+
         bool isConnected = false;
         public override bool IsConnected { get { return isConnected; } }
-        readonly static public ConnectionType DeviceType = ConnectionType.Ethernet;
+        
         public override int StartStep { get { return 460; } }
         public override int EndStep { get { return 620; } }
-        public override int StepsCount360 { get { return 1440; } }
+        public override int StepCount360 { get { return 1440; } }
 
         /// <summary>
         /// Initialize ethernet-type URG device.

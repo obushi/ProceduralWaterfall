@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using URG;
 
+// Official Documents of URG Sensor
 // http://sourceforge.net/p/urgnetwork/wiki/top_jp/
 // https://www.hokuyo-aut.co.jp/02sensor/07scanner/download/pdf/URG_SCIP20.pdf
 
@@ -64,8 +65,8 @@ public class Urg : MonoBehaviour
     [SerializeField]
     bool useEthernetTypeURG = true;
 
-    int beginId;
-    int endId;
+    int urgStartStep;
+    int urgEndStep;
     #endregion
 
     #region Debug
@@ -123,19 +124,16 @@ public class Urg : MonoBehaviour
 
         urg.Open();
 
-        beginId = urg.StartStep;
-        endId = urg.EndStep;
+        urgStartStep = urg.StartStep;
+        urgEndStep = urg.EndStep;
 
-        distances = new long[endId - beginId + 1];
+        distances = new long[urgEndStep - urgStartStep + 1];
 
         meshFilter = GetComponent<MeshFilter>();
         meshRenderer = GetComponent<MeshRenderer>();
         mesh = new Mesh();
-
-
         urgMesh = new UrgMesh();
-
-        DetectedObstacles = new Vector4[endId - beginId + 1];
+        DetectedObstacles = new Vector4[urgEndStep - urgStartStep + 1];
     }
 
     // Update is called once per frame
@@ -180,15 +178,15 @@ public class Urg : MonoBehaviour
 
     float Index2Rad(int index)
     {
-        float step = 2 * Mathf.PI / urg.StepsCount360;
+        float step = 2 * Mathf.PI / urg.StepCount360;
         float offset = step * (urg.EndStep + urg.StartStep) / 2;
         return step * index + offset;
     }
 
     Vector3 Index2Position(int index)
     {
-        return new Vector3(distances[index] * Mathf.Cos(Index2Rad(index + beginId)),
-                           distances[index] * Mathf.Sin(Index2Rad(index + beginId)));
+        return new Vector3(distances[index] * Mathf.Cos(Index2Rad(index + urgStartStep)),
+                           distances[index] * Mathf.Sin(Index2Rad(index + urgStartStep)));
     }
 
     void CreateMesh()
@@ -221,7 +219,7 @@ public class Urg : MonoBehaviour
 
     public void Connect()
     {
-        urg.Write(SCIP_library.SCIP_Writer.MD(beginId, endId, 1, 0, 0));
+        urg.Write(SCIP_library.SCIP_Writer.MD(urgStartStep, urgEndStep, 1, 0, 0));
     }
 
     public void Disconnect()

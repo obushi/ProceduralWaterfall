@@ -24,7 +24,7 @@ namespace URG
         /// <summary>
         /// Connection type of URG sensor.
         /// </summary>
-        public enum ConnectionType { Serial, Ethernet }
+        public enum URGType { Serial, Ethernet }
 
 
         protected List<long> distances;
@@ -73,6 +73,6 @@ namespace URG
         /// <summary>
         /// Number of steps per degree * 360
         /// </summary>
-        public abstract int StepsCount360 { get; }
+        public abstract int StepCount360 { get; }
     }
 }

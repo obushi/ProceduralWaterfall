@@ -17,15 +17,17 @@ namespace URG
         [SerializeField]
         readonly int baudRate;
 
+        readonly static public URGType DeviceType = URGType.Serial;
+
         SerialPort serialPort;
         Thread listenThread = null;
+
         bool isConnected = false;
         public override bool IsConnected { get { return isConnected; } }
 
-        readonly static public ConnectionType DeviceType = ConnectionType.Serial;
         public override int StartStep { get { return 300; } }
         public override int EndStep { get { return 450; } }
-        public override int StepsCount360 { get { return 1024; } }
+        public override int StepCount360 { get { return 1024; } }
 
         /// <summary>
         /// Initialize serial-type URG device.

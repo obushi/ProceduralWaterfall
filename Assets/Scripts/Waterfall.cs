@@ -29,7 +29,7 @@ namespace ProceduralWaterfall
     public class Waterfall : MonoBehaviour
     {
 
-        #region Global parameters
+        #region Debug
 
         [SerializeField]
         bool showStreams = true;
@@ -52,7 +52,7 @@ namespace ProceduralWaterfall
 
         #endregion
 
-        #region Emitter parameters
+        #region Waterfall parameters
 
         [Header("Emitter Params")]
 
@@ -202,7 +202,12 @@ namespace ProceduralWaterfall
                 drops[i].Position = Vector3.zero;
                 drops[i].PrevPosition = Vector3.zero;
                 drops[i].Velocity = new Vector4(0, -1, 0, 1);
-                drops[i].Params = new Vector4(1.0f, 1.0f, 1.0f, 1.0f);  // InitVhCoef, InitVvCoef, UpdatePosCoef, UpdateVelCoef
+                drops[i].Params = new Vector4(
+                    1.0f, // InitVhCoef
+                    1.0f, // InitVvCoef
+                    1.0f, // UpdatePosCoef
+                    1.0f  // UpdateVelCoef
+                );
             }
 
             dropsBuffer.SetData(drops);
@@ -234,7 +239,7 @@ namespace ProceduralWaterfall
             Graphics.Blit(null, perlinTexture, perlinMaterial, 0);
         }
 
-        int GetActiveBuffSize(ComputeBuffer cb)
+        int GetActiveBufferSize(ComputeBuffer cb)
         {
             int[] args = new int[] { 0, 1, 0, 0 };
             buffArgs.SetData(args);
@@ -243,7 +248,7 @@ namespace ProceduralWaterfall
             return args[0];
         }
 
-        ComputeBuffer GetActiveBuff(ComputeBuffer cb)
+        ComputeBuffer GetActiveBuffer(ComputeBuffer cb)
         {
             ComputeBuffer.CopyCount(cb, buffArgs, 0);
             return buffArgs;
@@ -272,7 +277,6 @@ namespace ProceduralWaterfall
             InitializeStreams();
             InitializeDrops();
             InitializeNoise();
-
 
             // Kernel #0 Initialize
 
@@ -317,9 +321,8 @@ namespace ProceduralWaterfall
             dropsComputeShader.SetBuffer(1, "_DropsPoolBuffer_Out", dropsPoolBuffer);
             dropsComputeShader.SetBuffer(1, "_StreamLinesBuffer", streamsBuffer);
             dropsComputeShader.SetTexture(1, "_PerlinTexture", perlinTexture);
-            var emitAmount = GetActiveBuffSize(dropsPoolBuffer) > maxEmitQuantity ? 1 : 0;
+            var emitAmount = GetActiveBufferSize(dropsPoolBuffer) > maxEmitQuantity ? 1 : 0;
             dropsComputeShader.Dispatch(1, emitAmount, 1, 1);
-
 
             // Kernel #2 Update
 
@@ -328,7 +331,6 @@ namespace ProceduralWaterfall
             dropsComputeShader.SetBuffer(2, "_StreamLinesBuffer", streamsBuffer);
             dropsComputeShader.SetBuffer(2, "_DetectedObjectsBuffer", DetectedObstaclesBuffer);
             dropsComputeShader.Dispatch(2, maxDropsCount / numThreadX, 1, 1);
-
 
             // Render
 
@@ -458,7 +460,7 @@ namespace ProceduralWaterfall
                 GUILayout.Label("After Collision Speed Multiplier Z :  " + collisionParams.z);
                 collisionParams.z = GUILayout.HorizontalSlider(collisionParams.z, 0.0001f, 3.0f);
 
-                GUILayout.Label("Drop Count :  " + (maxDropsCount - GetActiveBuffSize(dropsPoolBuffer)) + " / " + maxDropsCount);
+                GUILayout.Label("Drop Count :  " + (maxDropsCount - GetActiveBufferSize(dropsPoolBuffer)) + " / " + maxDropsCount);
                 GUILayout.Label("FPS : " + (1 / Time.deltaTime).ToString("0.00"));
 
                 GUILayout.EndArea();
