@@ -1,8 +1,6 @@
 ﻿using UnityEngine;
-using System.Collections;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
-using UnityEngine.Assertions;
 
 namespace ProceduralWaterfall
 {

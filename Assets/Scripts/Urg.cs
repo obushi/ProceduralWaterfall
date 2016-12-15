@@ -1,6 +1,4 @@
 ﻿using UnityEngine;
-using UnityEngine.Events;
-using UnityEngine.Assertions;
 using System.Collections.Generic;
 using System.Linq;
 using URG;
@@ -28,19 +26,19 @@ class UrgMesh
         IndexList.Clear();
     }
 
-    public void AddVertex(Vector3 _pos)
+    public void AddVertex(Vector3 pos)
     {
-        VertexList.Add(_pos);
+        VertexList.Add(pos);
     }
 
-    public void AddUv(Vector2 _uv)
+    public void AddUv(Vector2 uv)
     {
-        UVList.Add(_uv);
+        UVList.Add(uv);
     }
 
-    public void AddIndices(int[] _indices)
+    public void AddIndices(int[] indices)
     {
-        IndexList.AddRange(_indices);
+        IndexList.AddRange(indices);
     }
 }
 
@@ -49,45 +47,51 @@ public class Urg : MonoBehaviour
 {
     #region Device Config
     [SerializeField]
-    EthernetURG urg;
+    URGDevice urg;
 
     [SerializeField]
-    const string ipAddress = "192.168.0.35";
+    string ipAddress = "192.168.0.35";
 
     [SerializeField]
-    const int portNumber = 10940;
+    int portNumber = 10940;
 
     [SerializeField]
-    const int beginId = 460;
+    string portName = "COM3";
 
     [SerializeField]
-    const int endId = 620;
+    int baudRate = 115200;
+
+    [SerializeField]
+    bool useEthernetTypeURG = true;
+
+    int beginId;
+    int endId;
     #endregion
 
     #region Debug
 
-    float _scale = 0.15f;
+    float scale = 0.15f;
     public float Scale
     {
-        get { return _scale; }
+        get { return scale; }
         set
         {
             if (value > 0)
-                _scale = value;
+                scale = value;
         }
     }
 
-    Vector3 _posOffset = Vector3.zero;
+    Vector3 posOffset = Vector3.zero;
     public Vector3 PosOffset
     {
-        get { return _posOffset; }
-        set { _posOffset = value;  }
+        get { return posOffset; }
+        set { posOffset = value;  }
     }
 
-    bool _drawMesh = true;
+    bool drawMesh = true;
     public bool DrawMesh {
-        get { return _drawMesh; }
-        set { _drawMesh = value; }
+        get { return drawMesh; }
+        set { drawMesh = value; }
     }
     #endregion
 
@@ -108,14 +112,27 @@ public class Urg : MonoBehaviour
     // Use this for initialization
     void Start()
     {
+        if (useEthernetTypeURG)
+        {
+            urg = new EthernetURG(ipAddress, portNumber);
+        }
+        else
+        {
+            urg = new SerialURG(portName, baudRate);
+        }
+
+        urg.Open();
+
+        beginId = urg.StartStep;
+        endId = urg.EndStep;
+
         distances = new long[endId - beginId + 1];
 
         meshFilter = GetComponent<MeshFilter>();
         meshRenderer = GetComponent<MeshRenderer>();
         mesh = new Mesh();
 
-        urg = new EthernetURG(ipAddress, portNumber);
-        urg.Open();
+
         urgMesh = new UrgMesh();
 
         DetectedObstacles = new Vector4[endId - beginId + 1];
@@ -129,8 +146,8 @@ public class Urg : MonoBehaviour
         
         UpdateObstacleData();
 
-        meshRenderer.enabled = _drawMesh;
-        if (_drawMesh)
+        meshRenderer.enabled = drawMesh;
+        if (drawMesh)
         {
             CreateMesh();
             ApplyMesh();
@@ -141,7 +158,7 @@ public class Urg : MonoBehaviour
     {
         for (int i = 0; i < distances.Length; i++)
         {
-            Vector3 position = _scale * Index2Position(i) + PosOffset;
+            Vector3 position = scale * Index2Position(i) + PosOffset;
             if (IsOffScreen(position) || !IsValidDistance(distances[i]))
             {
                 distances[i] = 0;
@@ -161,10 +178,10 @@ public class Urg : MonoBehaviour
         return (viewPos.x < 0 || viewPos.x > 1 || viewPos.y < 0 || viewPos.y > 1);
     }
 
-    static float Index2Rad(int index)
+    float Index2Rad(int index)
     {
-        float step = 2 * Mathf.PI / 1440;
-        float offset = step * 540;
+        float step = 2 * Mathf.PI / urg.StepsCount360;
+        float offset = step * (urg.EndStep + urg.StartStep) / 2;
         return step * index + offset;
     }
 
@@ -182,8 +199,8 @@ public class Urg : MonoBehaviour
 
         for (int i = distances.Length - 1; i >= 0; i--)
         {
-            urgMesh.AddVertex(_scale * Index2Position(i) + PosOffset);
-            urgMesh.AddUv(Camera.main.WorldToViewportPoint(_scale * Index2Position(i) + PosOffset));
+            urgMesh.AddVertex(scale * Index2Position(i) + PosOffset);
+            urgMesh.AddUv(Camera.main.WorldToViewportPoint(scale * Index2Position(i) + PosOffset));
         }
 
         for (int i = 0; i < distances.Length - 1; i++)

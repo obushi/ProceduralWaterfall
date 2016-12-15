@@ -1,41 +1,41 @@
 ﻿using System;
 using UnityEngine;
 using System.Collections.Generic;
-using System.Net;
-using System.Net.Sockets;
 using SCIP_library;
 using System.Threading;
 using System.Text;
+using System.IO.Ports;
 
 namespace URG
 {
     [Serializable]
-    public class EthernetURG : URGDevice
+    public class SerialURG : URGDevice
     {
         [SerializeField]
-        readonly IPAddress ipAddress;
+        readonly string portName;
 
         [SerializeField]
-        readonly int port;
+        readonly int baudRate;
 
-        TcpClient tcpClient;
+        SerialPort serialPort;
         Thread listenThread = null;
         bool isConnected = false;
         public override bool IsConnected { get { return isConnected; } }
-        readonly static public ConnectionType DeviceType = ConnectionType.Ethernet;
-        public override int StartStep { get { return 460; } }
-        public override int EndStep { get { return 620; } }
-        public override int StepsCount360 { get { return 1440; } }
+
+        readonly static public ConnectionType DeviceType = ConnectionType.Serial;
+        public override int StartStep { get { return 300; } }
+        public override int EndStep { get { return 450; } }
+        public override int StepsCount360 { get { return 1024; } }
 
         /// <summary>
-        /// Initialize ethernet-type URG device.
+        /// Initialize serial-type URG device.
         /// </summary>
-        /// <param name="_ipAddress">IP Address of the URG device.</param>
-        /// <param name="_port">Port number of the URG device.</param>
-        public EthernetURG(string _ipAddress = "192.168.0.35", int _port = 10940)
+        /// <param name="_portName">Port name of the URG device.</param>
+        /// <param name="_baudRate">Baud rate of the URG device.</param>
+        public SerialURG(string _portName = "COM3", int _baudRate = 115200)
         {
-            ipAddress = IPAddress.Parse(_ipAddress);
-            port = _port;
+            portName = _portName;
+            baudRate = _baudRate;
 
             distances = new List<long>();
             intensities = new List<long>();
@@ -48,12 +48,14 @@ namespace URG
         {
             try
             {
-                tcpClient = new TcpClient();
-                tcpClient.Connect(ipAddress, port);
+                serialPort = new SerialPort(portName, baudRate);
+                serialPort.NewLine = "\n\n";
+                serialPort.Open();
+
                 listenThread = new Thread(new ParameterizedThreadStart(HandleClient));
                 isConnected = true;
                 listenThread.IsBackground = true;
-                listenThread.Start(tcpClient);
+                listenThread.Start(serialPort);
             }
             catch (Exception e)
             {
@@ -74,16 +76,10 @@ namespace URG
             }
 
 
-            if (tcpClient != null)
+            if (serialPort != null)
             {
-                if (tcpClient.Connected)
-                {
-                    if (tcpClient.GetStream() != null)
-                    {
-                        tcpClient.GetStream().Close();
-                    }
-                }
-                tcpClient.Close();
+                serialPort.Close();
+                serialPort.Dispose();
             }
         }
 
@@ -91,15 +87,14 @@ namespace URG
         {
             try
             {
-                using (TcpClient client = (TcpClient)obj)
-                using (NetworkStream stream = client.GetStream())
+                using (SerialPort client = (SerialPort)obj)
                 {
                     while (isConnected)
                     {
                         try
                         {
                             long timeStamp = 0;
-                            string receivedData = ReadLine(stream);
+                            string receivedData = client.ReadLine();
                             string parsedCommand = ParseCommand(receivedData);
 
                             SCIPCommands command = (SCIPCommands)Enum.Parse(typeof(SCIPCommands), parsedCommand);
@@ -149,60 +144,6 @@ namespace URG
         }
 
         /// <summary>
-        /// Read to "\n\n" from NetworkStream
-        /// </summary>
-        /// <returns>receive data</returns>
-        protected static string ReadLine(NetworkStream stream)
-        {
-            if (stream.CanRead)
-            {
-                StringBuilder sb = new StringBuilder();
-                bool is_NL2 = false;
-                bool is_NL = false;
-                do
-                {
-                    char buf = (char)stream.ReadByte();
-                    if (buf == '\n')
-                    {
-                        if (is_NL)
-                        {
-                            is_NL2 = true;
-                        }
-                        else
-                        {
-                            is_NL = true;
-                        }
-                    }
-                    else
-                    {
-                        is_NL = false;
-                    }
-                    sb.Append(buf);
-                } while (!is_NL2);
-
-                return sb.ToString();
-            }
-            else
-            {
-                return null;
-            }
-        }
-
-        protected static bool TCPWrite(NetworkStream stream, string data)
-        {
-            if (stream.CanWrite)
-            {
-                byte[] buffer = Encoding.ASCII.GetBytes(data);
-                stream.Write(buffer, 0, buffer.Length);
-                return true;
-            }
-            else
-            {
-                return false;
-            }
-        }
-
-        /// <summary>
         /// Write data to the URG device.
         /// </summary>
         /// <param name="data"></param>
@@ -213,7 +154,8 @@ namespace URG
                     Open();
                 }
                 if (Enum.IsDefined(typeof(SCIPCommands), ParseCommand(data))) {
-                    TCPWrite(tcpClient.GetStream(), data);
+                    var buffer = Encoding.ASCII.GetBytes(data);
+                    serialPort.Write(buffer, 0, buffer.Length);
                 }
             }
             catch (Exception e) {
