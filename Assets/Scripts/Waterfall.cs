@@ -223,8 +223,9 @@ namespace ProceduralWaterfall
                 streamObjects[i] = new GameObject("Stream Line [" + i + "]");
                 var lineRenderer = streamObjects[i].AddComponent<LineRenderer>();
                 lineRenderer.material.shader = Shader.Find("Unlit/Color");
-                lineRenderer.SetVertexCount(11);
-                lineRenderer.SetWidth(0.01f, 0.01f);
+                lineRenderer.numPositions = 11;
+                lineRenderer.startWidth = 0.01f;
+                lineRenderer.endWidth = 0.01f;
                 lineRenderer.SetPositions(GetParabolaPoints(streams[i].BirthPosition, streams[i].DeathPosition, 10));
             }
         }
