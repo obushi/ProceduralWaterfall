@@ -96,7 +96,7 @@ namespace URG
                         try
                         {
                             long timeStamp = 0;
-                            string receivedData = client.ReadLine();
+                            string receivedData = ReadLine(client);
                             string parsedCommand = ParseCommand(receivedData);
 
                             SCIPCommands command = (SCIPCommands)Enum.Parse(typeof(SCIPCommands), parsedCommand);
@@ -143,6 +143,46 @@ namespace URG
         {
             string[] split_command = receivedData.Split(new char[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
             return split_command[0].Substring(0, 2);
+        }
+
+        /// <summary>
+        /// Read to "\n\n" from NetworkStream
+        /// </summary>
+        /// <returns>receive data</returns>
+        protected static string ReadLine(SerialPort serialport)
+        {
+            if (serialport.IsOpen)
+            {
+                StringBuilder sb = new StringBuilder();
+                bool is_NL2 = false;
+                bool is_NL = false;
+                do
+                {
+                    char buf = (char)serialport.ReadByte();
+                    if (buf == '\n')
+                    {
+                        if (is_NL)
+                        {
+                            is_NL2 = true;
+                        }
+                        else
+                        {
+                            is_NL = true;
+                        }
+                    }
+                    else
+                    {
+                        is_NL = false;
+                    }
+                    sb.Append(buf);
+                } while (!is_NL2);
+
+                return sb.ToString();
+            }
+            else
+            {
+                return null;
+            }
         }
 
         /// <summary>
